@@ -14,13 +14,13 @@
 Опишем координаты трубки, являющейся источником:
 
 $$
-S(\theta)=\begin{pmatrix}R\cos\theta\\R\sin\theta\end{pmatrix}
+S(\theta)=\begin{pmatrix}R\cos\theta\\\ R\sin\theta\end{pmatrix}
 $$
 
 Также введем два единичные вектора (направление на центр и перпендикуляр к нему):
 
 $$
-\mathbf u_\theta=\begin{pmatrix}-\cos\theta\\-\sin\theta\end{pmatrix}\qquad
+\mathbf u_\theta=\begin{pmatrix}-\cos\theta\\\ -\sin\theta\end{pmatrix}\qquad
 \mathbf v_\theta=\begin{pmatrix}-\sin\theta\\\cos\theta\end{pmatrix}
 $$
 
@@ -88,15 +88,15 @@ $$
 $$
 
 И тут у нас есть 2 основных требования к решению:
-1. **Согласие с измерениями**: $\|A\boldsymbol\mu-\mathbf b\|_2\to\min$
+1. **Согласие с измерениями**: $\Vert A\boldsymbol\mu-\mathbf b\Vert_2\to\min$
 2. **Сложность изображения**: $\boldsymbol\mu$ не должна быть слишком "шумной" или "неровной".
 
-Второе требование удобно описать величиной $\|L\boldsymbol\mu\|_2^2$, где $L$ - выбранная матрица регуляризации.
+Второе требование удобно описать величиной $\Vert L\boldsymbol\mu\Vert_2^2$, где $L$ - выбранная матрица регуляризации.
 
-Задачу поиска экстремума при условии $\|L\boldsymbol\mu\|_2^2 \le \alpha$ можно записать с помощью множителей Лагранжа:
+Задачу поиска экстремума при условии $\Vert L\boldsymbol\mu\Vert_2^2 \le \alpha$ можно записать с помощью множителей Лагранжа:
 
 $$
-J_\lambda(\boldsymbol\mu)=\|A\boldsymbol\mu-\mathbf b\|_2^2+\lambda\|L\boldsymbol\mu\|_2^2
+J_\lambda(\boldsymbol\mu)=\Vert A\boldsymbol\mu-\mathbf b\Vert_2^2+\lambda\Vert L\boldsymbol\mu\Vert_2^2
 $$
 
 Обратим внимание на свойства функционала $J_\lambda(\boldsymbol\mu)$:
@@ -111,7 +111,7 @@ $$
 Выберем единичную матрицу $E\in\mathbb R^{N\times N}$:
 
 $$
-L=E\qquad \|L\boldsymbol\mu\|_2^2=\|\boldsymbol\mu\|_2^2=\sum_{j=1}^{N}\mu_j^2
+L=E\qquad \Vert L\boldsymbol\mu\Vert_2^2=\Vert\boldsymbol\mu\Vert_2^2=\sum_{j=1}^{N}\mu_j^2
 $$
 
 Это регуляризация Тихонова нулевого порядка. Она штрафует большую норму решения: при сопоставимом согласии с измерениями предпочтение получает распределение с меньшей суммой квадратов коэффициентов ослабления. Такой штраф сдерживает рост неустойчивых компонент решения, вызванный шумом в данных. При этом он непосредственно не учитывает различия между соседними пикселями и сам по себе не задаёт пространственную гладкость.
@@ -120,8 +120,8 @@ $$
 
 $$
 J_\lambda(\boldsymbol\mu)
-=\|A\boldsymbol\mu-\mathbf b\|_2^2+\lambda\|\boldsymbol\mu\|_2^2
-=\|A\boldsymbol\mu-\mathbf b\|_2^2+\lambda\sum_{j=1}^{N}\mu_j^2
+=\Vert A\boldsymbol\mu-\mathbf b\Vert_2^2+\lambda\Vert\boldsymbol\mu\Vert_2^2
+=\Vert A\boldsymbol\mu-\mathbf b\Vert_2^2+\lambda\sum_{j=1}^{N}\mu_j^2
 $$
 
 #### 4.2 Регуляризация по соседним пикселям
@@ -161,7 +161,7 @@ $$
 
 $$
 \begin{aligned}
-\int_\Omega\|\nabla\mu(x,y)\|_2^2\,dx\,dy
+\int_\Omega\Vert\nabla\mu(x,y)\Vert_2^2\,dx\,dy
 &\approx h^2\left[
 \sum_{i=1}^{n-1}\sum_{j=1}^{n}\left(\frac{\delta_x\mu_{i,j}}{h}\right)^2
 +\sum_{i=1}^{n}\sum_{j=1}^{n-1}\left(\frac{\delta_y\mu_{i,j}}{h}\right)^2
@@ -172,21 +172,21 @@ $$
 
 Здесь множитель $h^2$ — площадь пикселя; в двумерном случае на квадратной сетке он сокращается с $h^{-2}$ из квадратов разностных производных. Это связь с непрерывной моделью.
 
-Если обозначить дискретный градиент через $\nabla_h=L/h$, то $R(\boldsymbol\mu)=h^2\|\nabla_h\boldsymbol\mu\|_2^2$.
+Если обозначить дискретный градиент через $\nabla_h=L/h$, то $R(\boldsymbol\mu)=h^2\Vert\nabla_h\boldsymbol\mu\Vert_2^2$.
 
 Соответствующий дискретный функционал:
 
 $$
 \begin{aligned}
 J_\lambda(\boldsymbol\mu)
-&=\|A\boldsymbol\mu-\mathbf b\|_2^2+\lambda\|L\boldsymbol\mu\|_2^2\\
-&=\|A\boldsymbol\mu-\mathbf b\|_2^2+\lambda R(\boldsymbol\mu)\\
-&=\|A\boldsymbol\mu-\mathbf b\|_2^2
+&=\Vert A\boldsymbol\mu-\mathbf b\Vert_2^2+\lambda\Vert L\boldsymbol\mu\Vert_2^2\\
+&=\Vert A\boldsymbol\mu-\mathbf b\Vert_2^2+\lambda R(\boldsymbol\mu)\\
+&=\Vert A\boldsymbol\mu-\mathbf b\Vert_2^2
 +\lambda\left[
 \sum_{i=1}^{n-1}\sum_{j=1}^{n}(\mu_{i+1,j}-\mu_{i,j})^2
 +\sum_{i=1}^{n}\sum_{j=1}^{n-1}(\mu_{i,j+1}-\mu_{i,j})^2
 \right]\\
-&=\|A\boldsymbol\mu-\mathbf b\|_2^2+\lambda h^2\|\nabla_h\boldsymbol\mu\|_2^2
+&=\Vert A\boldsymbol\mu-\mathbf b\Vert_2^2+\lambda h^2\Vert\nabla_h\boldsymbol\mu\Vert_2^2
 \end{aligned}
 $$
 
