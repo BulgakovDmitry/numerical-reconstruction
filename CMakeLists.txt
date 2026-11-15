@@ -28,6 +28,7 @@ add_executable(numerical-reconstruction
     src/geometry.cpp
     src/scanner.cpp
     src/projector.cpp
+    src/regularization.cpp
     src/main.cpp
     src/io.cpp
 )
