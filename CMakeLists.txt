@@ -31,7 +31,6 @@ add_executable(numerical-reconstruction
     src/regularization.cpp
     src/reconstruction.cpp
     src/simulation.cpp
-    src/phantom.cpp
     src/main.cpp
     src/io.cpp
 )

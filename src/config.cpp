@@ -45,7 +45,6 @@ bool          Config::is_poisson_noise_enabled () const noexcept { return use_po
 double        Config::get_incident_photon_count() const noexcept { return incident_photon_count_; }
 std::uint32_t Config::get_random_seed          () const noexcept { return random_seed_;           }
 
-bool Config::is_phantom_enabled() const noexcept { return use_phantom_; }
 std::filesystem::path Config::get_input_path      () const { return input_path_;       }
 std::filesystem::path Config::get_output_directory() const { return output_directory_; }
 // ══════════════════════════════════════════════════════════════════
@@ -154,11 +153,6 @@ Config::Builder& Config::Builder::set_random_seed(const std::uint32_t random_see
 
 
 // ════ Builder: Input / Output ═════════════════════════════════════
-Config::Builder& Config::Builder::enable_phantom(const bool enable) {
-    config_.use_phantom_ = enable;
-    return *this;
-}
-
 Config::Builder& Config::Builder::set_input_path(const std::filesystem::path& input_path) {
     config_.input_path_ = input_path;
     return *this;
@@ -240,8 +234,6 @@ Config Config::from_command_line(const int argc, const char* const argv[]) {
             builder.set_incident_photon_count(parse_number<double>(next_value(), option));
         } else if (option == "--random-seed") {
             builder.set_random_seed(parse_number<std::uint32_t>(next_value(), option));
-        } else if (option == "--phantom") {
-            builder.enable_phantom(true);
         } else if (option == "--input") {
             builder.set_input_path(std::filesystem::path(next_value()));
         } else if (option == "--output") {
@@ -249,10 +241,6 @@ Config Config::from_command_line(const int argc, const char* const argv[]) {
         } else {
             throw std::invalid_argument("Unknown option: " + option);
         }
-    }
-
-    if (seen.contains("--phantom") && seen.contains("--input")) {
-        throw std::invalid_argument("Use either --phantom or --input, not both");
     }
     return builder.build();
 }
@@ -290,7 +278,6 @@ void Config::print_help(std::ostream& out) {
         << "  --incident-photon-count X  Incident photons (0 < X <= 1e12 for noise); default: " << defaults.incident_photon_count_ << '\n'
         << "  --random-seed N            Seed (0..4294967295); default: " << defaults.random_seed_ << '\n'
         << "\nInput / Output:\n"
-        << "  --phantom                  Generate an artificial suitcase instead of loading a file\n"
         << "  --input PATH               PGM image matching the grid; default: " << defaults.input_path_ << '\n'
         << "  --output PATH              Output directory; default: " << defaults.output_directory_ << '\n'
         << "\n  -h, --help                 Show this help (use on its own)\n"
@@ -336,9 +323,6 @@ void Config::validate() const {
     if (use_poisson_noise_ && incident_photon_count_ > 1e12) {
         throw std::invalid_argument("Config: incident_photon_count must not exceed 1e12 for Poisson noise");
     }
-    if (!use_phantom_ && input_path_.empty()) {
-        throw std::invalid_argument("Config: input_path must not be empty");
-    }
     if (output_directory_.empty()) {
         throw std::invalid_argument("Config: output_directory must not be empty");
     }
@@ -378,7 +362,6 @@ void Config::dump(std::ostream& out) const {
         << "Poisson noise enabled: " << (use_poisson_noise_ ? "true" : "false") << '\n'
         << "Incident photon count: " << incident_photon_count_ << '\n'
         << "Random seed: " << random_seed_ << '\n'
-        << "Input source: " << (use_phantom_ ? "generated suitcase" : "PGM file") << '\n'
         << "Input path: " << input_path_ << '\n'
         << "Output directory: " << output_directory_ << '\n';
 }
@@ -393,9 +376,6 @@ static T parse_number(const std::string_view text, const std::string_view option
     std::errc error{};
 
     if constexpr (std::is_floating_point_v<T>) {
-        // libc++ shipped with Apple clang (<= 15) lacks std::from_chars for double,
-        // so floating-point values are parsed with strtod under the same rules:
-        // no leading whitespace and no '+' sign.
         const std::string buffer(text);
         char* parse_end = nullptr;
         if (!buffer.empty() && !std::isspace(static_cast<unsigned char>(buffer.front())) && buffer.front() != '+') {

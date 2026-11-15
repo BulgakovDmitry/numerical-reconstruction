@@ -5,7 +5,6 @@
 #include "regularization.hpp"
 #include "reconstruction.hpp"
 #include "simulation.hpp"
-#include "phantom.hpp"
 #include "io.hpp"
 
 #include <chrono>
@@ -18,9 +17,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
-
-static void validate_output_paths(const NumReconstruction::Config& config);
-
 
 int main(int argc, char* argv[]) {
     using NumReconstruction::Config;
@@ -44,7 +40,6 @@ int main(int argc, char* argv[]) {
         // 3. Scanner geometry
         const auto scanner_geometry = FanBeamGeometry::from_config(config);
         NumReconstruction::validate_geometry(grid, scanner_geometry);
-        validate_output_paths(config);
 
         config.dump(std::cout);
         std::cout << '\n';
@@ -52,11 +47,9 @@ int main(int argc, char* argv[]) {
         std::cout << '\n';
         scanner_geometry.dump(std::cout);
 
-        // 4. Load or generate the original attenuation image
+        // 4. Load the original attenuation image
         constexpr double mu_max = 1.0;
-        const auto mu_true = config.is_phantom_enabled()
-            ? NumReconstruction::create_suitcase_phantom(grid, mu_max)
-            : NumReconstruction::load_image(config.get_input_path(), grid, mu_max);
+        const auto mu_true = NumReconstruction::load_image(config.get_input_path(), grid, mu_max);
         std::cout << "\nOriginal image: " << mu_true.size() << " pixels\n";
 
         // 5. Build the system matrix
@@ -164,20 +157,4 @@ int main(int argc, char* argv[]) {
     }
 
     return 0;
-}
-
-static void validate_output_paths(const NumReconstruction::Config& config) {
-    const auto output = config.get_output_directory();
-    if (std::filesystem::exists(output) && !std::filesystem::is_directory(output)) {
-        throw std::invalid_argument("Output path must be a directory");
-    }
-    if (config.is_phantom_enabled() || !std::filesystem::exists(config.get_input_path())) return;
-
-    for (const auto* name : {"original.pgm", "reconstructed.pgm", "original.csv", "reconstructed.csv",
-                             "sinogram.csv", "ideal_sinogram.csv", "report.txt"}) {
-        const auto target = output / name;
-        if (std::filesystem::exists(target) && std::filesystem::equivalent(config.get_input_path(), target)) {
-            throw std::invalid_argument("Output would overwrite the input image; choose a different --output directory");
-        }
-    }
 }
