@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <iosfwd>
 #include <numbers>
 
 namespace NumReconstruction {
@@ -63,36 +64,45 @@ public:
     struct Builder;
     // ══════════════════════════════════════════════════════════════
 
+    // ════ Command line ═══════════════════════════════════════════
+    [[nodiscard]] static Config from_command_line(int argc, const char* const argv[]);
+    static void print_help(std::ostream& out);
+    // ══════════════════════════════════════════════════════════════
+
     // ════ Validation ══════════════════════════════════════════════
     void validate() const;
     // ══════════════════════════════════════════════════════════════
 
+    // ════ Dump ════════════════════════════════════════════════════
+    void dump(std::ostream& out) const;
+    // ══════════════════════════════════════════════════════════════
+
 
     // ════ Getters ═════════════════════════════════════════════════
-    [[nodiscard]] int    get_pixels_x    () const noexcept { return pixels_x_;     }
-    [[nodiscard]] int    get_pixels_y    () const noexcept { return pixels_y_;     }
-    [[nodiscard]] double get_image_width () const noexcept { return image_width_;  }
-    [[nodiscard]] double get_image_height() const noexcept { return image_height_; }
+    [[nodiscard]] int    get_pixels_x    () const noexcept;
+    [[nodiscard]] int    get_pixels_y    () const noexcept;
+    [[nodiscard]] double get_image_width () const noexcept;
+    [[nodiscard]] double get_image_height() const noexcept;
 
-    [[nodiscard]] double get_radius           () const noexcept { return radius_;            }
-    [[nodiscard]] double get_detector_distance() const noexcept { return detector_distance_; }
-    [[nodiscard]] int    get_num_angles       () const noexcept { return num_angles_;        }
-    [[nodiscard]] int    get_num_detectors    () const noexcept { return num_detectors_;     }
-    [[nodiscard]] double get_start_angle      () const noexcept { return start_angle_;       }
-    [[nodiscard]] double get_scan_angle       () const noexcept { return scan_angle_;        }
-    [[nodiscard]] double get_half_fan_angle   () const noexcept { return half_fan_angle_;    }
+    [[nodiscard]] double get_radius           () const noexcept;
+    [[nodiscard]] double get_detector_distance() const noexcept;
+    [[nodiscard]] int    get_num_angles       () const noexcept;
+    [[nodiscard]] int    get_num_detectors    () const noexcept;
+    [[nodiscard]] double get_start_angle      () const noexcept;
+    [[nodiscard]] double get_scan_angle       () const noexcept;
+    [[nodiscard]] double get_half_fan_angle   () const noexcept;
 
-    [[nodiscard]] double             get_lambda             () const noexcept { return lambda_;         }
-    [[nodiscard]] RegularizationType get_regularization_type() const noexcept { return regularization_; }
-    [[nodiscard]] double             get_epsilon            () const noexcept { return epsilon_;        }
-    [[nodiscard]] int                get_max_iterations     () const noexcept { return max_iterations_; }
+    [[nodiscard]] double             get_lambda             () const noexcept;
+    [[nodiscard]] RegularizationType get_regularization_type() const noexcept;
+    [[nodiscard]] double             get_epsilon            () const noexcept;
+    [[nodiscard]] int                get_max_iterations     () const noexcept;
 
-    [[nodiscard]] bool          is_poisson_noise_enabled () const noexcept { return use_poisson_noise_;     }
-    [[nodiscard]] double        get_incident_photon_count() const noexcept { return incident_photon_count_; }
-    [[nodiscard]] std::uint32_t get_random_seed          () const noexcept { return random_seed_;           }
+    [[nodiscard]] bool          is_poisson_noise_enabled () const noexcept;
+    [[nodiscard]] double        get_incident_photon_count() const noexcept;
+    [[nodiscard]] std::uint32_t get_random_seed          () const noexcept;
 
-    [[nodiscard]] std::filesystem::path get_input_path      () const { return input_path_;       }
-    [[nodiscard]] std::filesystem::path get_output_directory() const { return output_directory_; }
+    [[nodiscard]] std::filesystem::path get_input_path      () const;
+    [[nodiscard]] std::filesystem::path get_output_directory() const;
     // ══════════════════════════════════════════════════════════════
 };
 
@@ -100,123 +110,48 @@ struct Config::Builder {
     Config config_;
 
     // ════ Image grid ══════════════════════════════════════════════
-    Builder& set_pixels_x(const int pixels_x) {
-        config_.pixels_x_ = pixels_x;
-        return *this;
-    }
+    Builder& set_pixels_x    (const int pixels_x);
+    Builder& set_pixels_y    (const int pixels_y);
 
-    Builder& set_pixels_y(const int pixels_y) {
-        config_.pixels_y_ = pixels_y;
-        return *this;
-    }
-
-    Builder& set_image_width(const double image_width) {
-        config_.image_width_ = image_width;
-        return *this;
-    }
-
-    Builder& set_image_height(const double image_height) {
-        config_.image_height_ = image_height;
-        return *this;
-    }
+    Builder& set_image_width (const double image_width );
+    Builder& set_image_height(const double image_height);
     // ══════════════════════════════════════════════════════════════
 
 
     // ════ scanner geometry ════════════════════════════════════════
-    Builder& set_radius(const double radius) {
-        config_.radius_ = radius;
-        return *this;
-    }
+    Builder& set_radius           (const double radius);
+    Builder& set_detector_distance(const double detector_distance);
 
-    Builder& set_detector_distance(const double detector_distance) {
-        config_.detector_distance_ = detector_distance;
-        return *this;
-    }
+    Builder& set_num_angles       (const int num_angles);
+    Builder& set_num_detectors    (const int num_detectors);
 
-    Builder& set_num_angles(const int num_angles) {
-        config_.num_angles_ = num_angles;
-        return *this;
-    }
-
-    Builder& set_num_detectors(const int num_detectors) {
-        config_.num_detectors_ = num_detectors;
-        return *this;
-    }
-
-    Builder& set_start_angle(const double start_angle) {
-        config_.start_angle_ = start_angle;
-        return *this;
-    }
-
-    Builder& set_scan_angle(const double scan_angle) {
-        config_.scan_angle_ = scan_angle;
-        return *this;
-    }
-
-    Builder& set_half_fan_angle(const double half_fan_angle) {
-        config_.half_fan_angle_ = half_fan_angle;
-        return *this;
-    }
+    Builder& set_start_angle      (const double start_angle);
+    Builder& set_scan_angle       (const double scan_angle);
+    Builder& set_half_fan_angle   (const double half_fan_angle);
     // ══════════════════════════════════════════════════════════════
 
 
     // ════ Reconstruction parameters ═══════════════════════════════
-    Builder& set_lambda(const double lambda) {
-        config_.lambda_ = lambda;
-        return *this;
-    }
-
-    Builder& set_regularization(const Config::RegularizationType regularization) {
-        config_.regularization_ = regularization;
-        return *this;
-    }
-
-    Builder& set_epsilon(const double epsilon) {
-        config_.epsilon_ = epsilon;
-        return *this;
-    }
-
-    Builder& set_max_iterations(const int max_iterations) {
-        config_.max_iterations_ = max_iterations;
-        return *this;
-    }
+    Builder& set_lambda        (const double                     lambda);
+    Builder& set_regularization(const Config::RegularizationType regularization);
+    Builder& set_epsilon       (const double                     epsilon);
+    Builder& set_max_iterations(const int                        max_iterations);
     // ══════════════════════════════════════════════════════════════
 
 
     // ════ Measurement simulation ══════════════════════════════════
-    Builder& enable_poisson_noise(const bool enable) {
-        config_.use_poisson_noise_ = enable;
-        return *this;
-    }
-
-    Builder& set_incident_photon_count(const double incident_photon_count) {
-        config_.incident_photon_count_ = incident_photon_count;
-        return *this;
-    }
-
-    Builder& set_random_seed(const std::uint32_t random_seed) {
-        config_.random_seed_ = random_seed;
-        return *this;
-    }
+    Builder& enable_poisson_noise     (const bool          enable);
+    Builder& set_incident_photon_count(const double        incident_photon_count);
+    Builder& set_random_seed          (const std::uint32_t random_seed);
     // ══════════════════════════════════════════════════════════════
 
 
     // ════ Input / Output ══════════════════════════════════════════
-    Builder& set_input_path(const std::filesystem::path& input_path) {
-        config_.input_path_ = input_path;
-        return *this;
-    }
-
-    Builder& set_output_directory(const std::filesystem::path& output_directory) {
-        config_.output_directory_ = output_directory;
-        return *this;
-    }
+    Builder& set_input_path      (const std::filesystem::path& input_path);
+    Builder& set_output_directory(const std::filesystem::path& output_directory);
     // ══════════════════════════════════════════════════════════════
 
-    [[nodiscard]] Config build() const {
-        config_.validate();
-        return config_;
-    }
+    [[nodiscard]] Config build() const;
 };
 
 
