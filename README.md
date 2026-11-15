@@ -242,34 +242,3 @@ $$
 \boldsymbol\mu_\lambda
 =\left(A^{\mathsf T}A+\lambda L^{\mathsf T}L\right)^{-1}A^{\mathsf T}\mathbf b
 $$
-
-## Структура проекта
-```txt
-./
-│
-├── CMakeLists.txt
-├── README.md
-├── .gitignore
-│
-├── include/
-│   ├── config.hpp - Параметры эксперимента и геометрии сканирования
-│   ├── geometry.hpp - Векторы, сетка и функции для работы с координатами источника, детекторов и лучей
-│   ├── scanner.hpp - Координаты источника, детекторов и параметризация лучей
-│   ├── projector.hpp - Реализация алгоритма Сиддона и построение матрицы A
-│   ├── regularization.hpp - Построение матрицы регуляризации L
-│   ├── reconstruction.hpp - Решение обратной задачи методом Тихонова
-│   └── io.hpp - Сохранение изображений, синограмм и результатов экспериментов
-│
-├── src/
-│   ├── main.cpp
-│   ├── geometry.cpp
-│   ├── scanner.cpp
-│   ├── projector.cpp
-│   ├── regularization.cpp
-│   ├── reconstruction.cpp
-│   └── io.cpp
-│
-├── tests/
-│
-└── results/
-```
