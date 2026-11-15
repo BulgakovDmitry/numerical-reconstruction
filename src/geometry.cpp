@@ -1,5 +1,6 @@
 #include "geometry.hpp"
 #include "config.hpp"
+#include "tools.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -10,16 +11,9 @@
 namespace NumReconstruction {
 namespace {
 
-void require_positive_finite(double value, const char* message) {
-    if (!std::isfinite(value) || value <= 0.0) {
-        throw std::invalid_argument(message);
-    }
-}
-
 Index checked_pixel_count(int nx, int ny) {
-    if (nx <= 0 || ny <= 0) {
-        throw std::invalid_argument("Grid2D: pixel counts must be positive");
-    }
+    Tools::require_positive(nx, "Grid2D: pixels_x");
+    Tools::require_positive(ny, "Grid2D: pixels_y");
     if (static_cast<Index>(nx) > std::numeric_limits<Index>::max() / ny) {
         throw std::overflow_error("Grid2D: pixel count exceeds Eigen::Index");
     }
@@ -31,12 +25,12 @@ Index checked_pixel_count(int nx, int ny) {
 Grid2D::Grid2D(int pixels_x, int pixels_y, double width, double height)
     : pixels_x_(pixels_x), pixels_y_(pixels_y), width_(width), height_(height),
       hx_(0.0), hy_(0.0), pixel_count_(checked_pixel_count(pixels_x, pixels_y)) {
-    require_positive_finite(width_, "Grid2D: width must be finite and positive");
-    require_positive_finite(height_, "Grid2D: height must be finite and positive");
+    Tools::require_positive(width_, "Grid2D: width");
+    Tools::require_positive(height_, "Grid2D: height");
     hx_ = width_ / pixels_x_;
     hy_ = height_ / pixels_y_;
-    require_positive_finite(hx_, "Grid2D: x spacing is not representable");
-    require_positive_finite(hy_, "Grid2D: y spacing is not representable");
+    Tools::require_positive(hx_, "Grid2D: x spacing");
+    Tools::require_positive(hy_, "Grid2D: y spacing");
     if (hx_ / 2.0 == 0.0 || hy_ / 2.0 == 0.0) {
         throw std::invalid_argument("Grid2D: pixel half spacing is not representable");
     }
@@ -63,16 +57,13 @@ Bounds2D Grid2D::bounds() const noexcept {
 }
 
 Index Grid2D::index(int row, int col) const {
-    if (row < 0 || row >= pixels_y_ || col < 0 || col >= pixels_x_) {
-        throw std::out_of_range("Grid2D: pixel coordinates out of range");
-    }
+    Tools::check_index(row, pixels_y_, "Grid2D: pixel coordinates out of range");
+    Tools::check_index(col, pixels_x_, "Grid2D: pixel coordinates out of range");
     return static_cast<Index>(row) * pixels_x_ + col;
 }
 
 PixelIndex Grid2D::pixel(Index value) const {
-    if (value < 0 || value >= pixel_count_) {
-        throw std::out_of_range("Grid2D: pixel index out of range");
-    }
+    Tools::check_index(value, pixel_count_, "Grid2D: pixel index out of range");
     return {static_cast<int>(value / pixels_x_), static_cast<int>(value % pixels_x_)};
 }
 

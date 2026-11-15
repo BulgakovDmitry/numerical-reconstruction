@@ -10,6 +10,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 add_executable(numerical-reconstruction
+    src/tools.cpp
     src/config.cpp
     src/geometry.cpp
     src/scanner.cpp

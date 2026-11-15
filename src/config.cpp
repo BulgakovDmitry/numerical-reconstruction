@@ -1,8 +1,8 @@
 #include "config.hpp"
+#include "tools.hpp"
 
 #include <algorithm>
 #include <charconv>
-#include <cmath>
 #include <ostream>
 #include <stdexcept>
 #include <string>
@@ -12,10 +12,6 @@
 #include <unordered_set>
 
 namespace NumReconstruction {
-
-static void require_positive(const int    value, const char* name);
-static void require_positive(const double value, const char* name);
-static void require_finite  (const double value, const char* name);
 
 template <typename T>
 static T parse_number(const std::string_view text, const std::string_view option);
@@ -288,23 +284,23 @@ void Config::print_help(std::ostream& out) {
 
 // ════ Validation ══════════════════════════════════════════════════
 void Config::validate() const {
-    require_positive(pixels_x_,     "pixels_x"    );
-    require_positive(pixels_y_,     "pixels_y"    );
-    require_positive(image_width_,  "image_width" );
-    require_positive(image_height_, "image_height");
+    Tools::require_positive(pixels_x_,     "Config: pixels_x"    );
+    Tools::require_positive(pixels_y_,     "Config: pixels_y"    );
+    Tools::require_positive(image_width_,  "Config: image_width" );
+    Tools::require_positive(image_height_, "Config: image_height");
 
-    require_positive(radius_,            "radius"           );
-    require_positive(detector_distance_, "detector_distance");
-    require_positive(num_angles_,        "num_angles"       );
-    require_positive(num_detectors_,     "num_detectors"    );
-    require_finite  (start_angle_,       "start_angle"      );
-    require_positive(scan_angle_,        "scan_angle"       );
-    require_positive(half_fan_angle_,    "half_fan_angle"   );
+    Tools::require_positive(radius_,            "Config: radius"           );
+    Tools::require_positive(detector_distance_, "Config: detector_distance");
+    Tools::require_positive(num_angles_,        "Config: num_angles"       );
+    Tools::require_positive(num_detectors_,     "Config: num_detectors"    );
+    Tools::require_finite  (start_angle_,       "Config: start_angle"      );
+    Tools::require_positive(scan_angle_,        "Config: scan_angle"       );
+    Tools::require_positive(half_fan_angle_,    "Config: half_fan_angle"   );
 
     if (half_fan_angle_ >= std::numbers::pi / 2.0)
         throw std::invalid_argument("Config: half_fan_angle must be less than pi/2 radians");
 
-    require_finite(lambda_, "lambda");
+    Tools::require_finite(lambda_, "Config: lambda");
     if (lambda_ < 0.0)
         throw std::invalid_argument("Config: lambda must be nonnegative");
 
@@ -316,9 +312,9 @@ void Config::validate() const {
             throw std::invalid_argument("Config: regularization must be ZeroOrder or FirstOrder");
     }
 
-    require_positive(epsilon_,               "epsilon"              );
-    require_positive(max_iterations_,        "max_iterations"       );
-    require_positive(incident_photon_count_, "incident_photon_count");
+    Tools::require_positive(epsilon_,               "Config: epsilon"              );
+    Tools::require_positive(max_iterations_,        "Config: max_iterations"       );
+    Tools::require_positive(incident_photon_count_, "Config: incident_photon_count");
 
     if (input_path_.empty()) {
         throw std::invalid_argument("Config: input_path must not be empty");
@@ -364,28 +360,6 @@ void Config::dump(std::ostream& out) const {
         << "Random seed: " << random_seed_ << '\n'
         << "Input path: " << input_path_ << '\n'
         << "Output directory: " << output_directory_ << '\n';
-}
-// ══════════════════════════════════════════════════════════════════
-
-
-// ════ Validation helper functions ═════════════════════════════════
-static void require_positive(const int value, const char* name) {
-    if (value <= 0) {
-        throw std::invalid_argument(std::string("Config: ") + name + " must be greater than zero");
-    }
-}
-
-static void require_finite(const double value, const char* name) {
-    if (!std::isfinite(value)) {
-        throw std::invalid_argument(std::string("Config: ") + name + " must be finite");
-    }
-}
-
-static void require_positive(const double value, const char* name) {
-    require_finite(value, name);
-    if (value <= 0.0) {
-        throw std::invalid_argument(std::string("Config: ") + name + " must be greater than zero");
-    }
 }
 // ══════════════════════════════════════════════════════════════════
 

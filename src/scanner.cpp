@@ -1,5 +1,6 @@
 #include "scanner.hpp"
 #include "config.hpp"
+#include "tools.hpp"
 
 #include <cmath>
 #include <limits>
@@ -9,22 +10,13 @@
 namespace NumReconstruction {
 namespace {
 
-void require_positive_finite(double value, const char* message) {
-    if (!std::isfinite(value) || value <= 0.0) throw std::invalid_argument(message);
-}
-
 Index checked_measurement_count(int views, int detectors) {
-    if (views <= 0 || detectors <= 0) {
-        throw std::invalid_argument("FanBeamGeometry: counts must be positive");
-    }
+    Tools::require_positive(views, "FanBeamGeometry: num_angles");
+    Tools::require_positive(detectors, "FanBeamGeometry: num_detectors");
     if (static_cast<Index>(views) > std::numeric_limits<Index>::max() / detectors) {
         throw std::overflow_error("FanBeamGeometry: measurement count exceeds Eigen::Index");
     }
     return static_cast<Index>(views) * detectors;
-}
-
-void check_index(int index, int count, const char* message) {
-    if (index < 0 || index >= count) throw std::out_of_range(message);
 }
 
 } // namespace
@@ -36,14 +28,15 @@ FanBeamGeometry::FanBeamGeometry(double radius, double detector_distance,
       num_detectors_(num_detectors), half_fan_angle_(half_fan_angle),
       start_angle_(start_angle), scan_angle_(scan_angle),
       measurement_count_(checked_measurement_count(num_angles, num_detectors)) {
-    require_positive_finite(radius_, "FanBeamGeometry: radius must be finite and positive");
-    require_positive_finite(detector_distance_, "FanBeamGeometry: distance must be finite and positive");
-    require_positive_finite(half_fan_angle_, "FanBeamGeometry: half fan angle must be finite and positive");
+    Tools::require_positive(radius_, "FanBeamGeometry: radius");
+    Tools::require_positive(detector_distance_, "FanBeamGeometry: distance");
+    Tools::require_positive(half_fan_angle_, "FanBeamGeometry: half fan angle");
     if (half_fan_angle_ >= std::numbers::pi / 2.0) {
         throw std::invalid_argument("FanBeamGeometry: half fan angle must be less than pi/2");
     }
-    require_positive_finite(scan_angle_, "FanBeamGeometry: scan angle must be finite and positive");
-    if (scan_angle_ > 2.0 * std::numbers::pi || !std::isfinite(start_angle_)) {
+    Tools::require_positive(scan_angle_, "FanBeamGeometry: scan angle");
+    Tools::require_finite(start_angle_, "FanBeamGeometry: start_angle");
+    if (scan_angle_ > 2.0 * std::numbers::pi) {
         throw std::invalid_argument("FanBeamGeometry: invalid scan interval");
     }
     // All detector coordinates are bounded in magnitude by radius+distance.
@@ -80,12 +73,12 @@ void FanBeamGeometry::dump(std::ostream& out) const {
 }
 
 double FanBeamGeometry::angle(int view) const {
-    check_index(view, num_angles_, "FanBeamGeometry: view index out of range");
+    Tools::check_index(view, num_angles_, "FanBeamGeometry: view index out of range");
     return start_angle_ + (static_cast<double>(view) / num_angles_) * scan_angle_;
 }
 
 double FanBeamGeometry::fan_angle(int detector) const {
-    check_index(detector, num_detectors_, "FanBeamGeometry: detector index out of range");
+    Tools::check_index(detector, num_detectors_, "FanBeamGeometry: detector index out of range");
     return (2.0 * ((static_cast<double>(detector) + 0.5) / num_detectors_) - 1.0)
         * half_fan_angle_;
 }
@@ -116,15 +109,13 @@ Ray2D FanBeamGeometry::ray(int view, int detector) const {
 }
 
 Index FanBeamGeometry::measurement_index(int view, int detector) const {
-    check_index(view, num_angles_, "FanBeamGeometry: view index out of range");
-    check_index(detector, num_detectors_, "FanBeamGeometry: detector index out of range");
+    Tools::check_index(view, num_angles_, "FanBeamGeometry: view index out of range");
+    Tools::check_index(detector, num_detectors_, "FanBeamGeometry: detector index out of range");
     return static_cast<Index>(view) * num_detectors_ + detector;
 }
 
 MeasurementIndex FanBeamGeometry::measurement_indices(Index index) const {
-    if (index < 0 || index >= measurement_count_) {
-        throw std::out_of_range("FanBeamGeometry: measurement index out of range");
-    }
+    Tools::check_index(index, measurement_count_, "FanBeamGeometry: measurement index out of range");
     return {static_cast<int>(index / num_detectors_), static_cast<int>(index % num_detectors_)};
 }
 
