@@ -213,24 +213,35 @@ void save_image(const std::filesystem::path& path,
 
 void save_sinogram(const std::filesystem::path& path, const Vector& measurements,
                    const int num_angles, const int num_detectors) {
-    const Index count = checked_size(num_angles, num_detectors, "save_sinogram");
-    if (measurements.size() != count) {
-        throw std::invalid_argument("save_sinogram: vector size does not match the scanner dimensions");
-    }
-    if (!measurements.allFinite()) {
-        throw std::invalid_argument("save_sinogram: measurements must be finite");
+    save_matrix(path, measurements, num_angles, num_detectors);
+}
+
+
+// ════ Numeric results ════════════════════════════════════════════
+void save_matrix(const std::filesystem::path& path, const Vector& values,
+                 const int rows, const int cols) {
+    const Index count = checked_size(rows, cols, "save_matrix");
+    if (values.size() != count || !values.allFinite()) {
+        throw std::invalid_argument("save_matrix: expected finite values matching the matrix dimensions");
     }
 
-    auto file = open_output(path, "save_sinogram");
+    auto file = open_output(path, "save_matrix");
     file << std::setprecision(std::numeric_limits<double>::max_digits10);
-    for (int view = 0; view < num_angles; ++view) {
-        for (int detector = 0; detector < num_detectors; ++detector) {
-            if (detector != 0) file << ',';
-            file << measurements[static_cast<Index>(view) * num_detectors + detector];
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            if (col != 0) file << ',';
+            file << values[static_cast<Index>(row) * cols + col];
         }
         file << '\n';
     }
-    close_output(file, path, "save_sinogram");
+    close_output(file, path, "save_matrix");
 }
+
+void save_report(const std::filesystem::path& path, const std::string_view report) {
+    auto file = open_output(path, "save_report");
+    file << report;
+    close_output(file, path, "save_report");
+}
+// ══════════════════════════════════════════════════════════════════
 
 } // namespace NumReconstruction

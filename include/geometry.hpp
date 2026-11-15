@@ -28,7 +28,6 @@ struct RayInterval {
     double t_exit;
 };
 
-// Centered rectangle; x points right, y up, image rows run from top to bottom.
 class Grid2D {
 public:
     Grid2D(int pixels_x, int pixels_y, double width, double height);
@@ -47,11 +46,9 @@ public:
     [[nodiscard]] Index index(int row, int col) const;
     [[nodiscard]] PixelIndex pixel(Index index) const;
     [[nodiscard]] Vec2 pixel_center(int row, int col) const;
-    // Edge indices include the final edge: [0,pixels_x] / [0,pixels_y].
     [[nodiscard]] double x_edge(int col_edge) const;
     [[nodiscard]] double y_edge(int row_edge) const;
 
-    // Cells own [left,right) x (bottom,top]. Nonfinite/outside points -> nullopt.
     [[nodiscard]] std::optional<PixelIndex> locate(const Vec2& point) const;
 
 private:
@@ -64,7 +61,6 @@ private:
     Index pixel_count_;
 };
 
-// Finite source-to-detector segment: r(t)=source+t*(detector-source), t in [0,1].
 class Ray2D {
 public:
     Ray2D(Vec2 source, Vec2 detector);
@@ -83,9 +79,6 @@ private:
     double length_;
 };
 
-// Closed-box geometric clipping. A point contact has zero length -> nullopt.
-// Segments along box edges are retained; pixel ownership belongs to Grid2D.
-// Invalid/nonfinite or degenerate bounds throw std::invalid_argument.
 [[nodiscard]] std::optional<RayInterval>
 clip_ray_to_box(const Ray2D& ray, const Bounds2D& bounds);
 

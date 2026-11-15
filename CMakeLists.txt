@@ -29,6 +29,9 @@ add_executable(numerical-reconstruction
     src/scanner.cpp
     src/projector.cpp
     src/regularization.cpp
+    src/reconstruction.cpp
+    src/simulation.cpp
+    src/phantom.cpp
     src/main.cpp
     src/io.cpp
 )

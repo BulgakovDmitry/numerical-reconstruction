@@ -55,6 +55,7 @@ private:
 
 
     // ════ Input / Output ══════════════════════════════════════════
+    bool use_phantom_ = false;
     std::filesystem::path input_path_       = "input/high/04_suitcase.pgm";
     std::filesystem::path output_directory_ = "output";
     // ══════════════════════════════════════════════════════════════
@@ -101,6 +102,7 @@ public:
     [[nodiscard]] double        get_incident_photon_count() const noexcept;
     [[nodiscard]] std::uint32_t get_random_seed          () const noexcept;
 
+    [[nodiscard]] bool is_phantom_enabled() const noexcept;
     [[nodiscard]] std::filesystem::path get_input_path      () const;
     [[nodiscard]] std::filesystem::path get_output_directory() const;
     // ══════════════════════════════════════════════════════════════
@@ -147,6 +149,7 @@ struct Config::Builder {
 
 
     // ════ Input / Output ══════════════════════════════════════════
+    Builder& enable_phantom      (const bool enable);
     Builder& set_input_path      (const std::filesystem::path& input_path);
     Builder& set_output_directory(const std::filesystem::path& output_directory);
     // ══════════════════════════════════════════════════════════════
