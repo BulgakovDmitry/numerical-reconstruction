@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <limits>
+#include <ostream>
 #include <stdexcept>
 
 namespace NumReconstruction {
@@ -64,6 +65,18 @@ FanBeamGeometry FanBeamGeometry::from_config(const Config& config) {
     return {config.get_radius(), config.get_detector_distance(), config.get_num_angles(),
             config.get_num_detectors(), config.get_half_fan_angle(),
             config.get_start_angle(), config.get_scan_angle()};
+}
+
+void FanBeamGeometry::dump(std::ostream& out) const {
+    out << "Fan-beam geometry:\n"
+        << "Source radius: " << radius_ << " m\n"
+        << "Source-detector distance: " << detector_distance_ << " m\n"
+        << "Number of angles: " << num_angles_ << '\n'
+        << "Number of detectors: " << num_detectors_ << '\n'
+        << "Start angle: " << start_angle_ << " rad\n"
+        << "Scan angle: " << scan_angle_ << " rad\n"
+        << "Half fan angle: " << half_fan_angle_ << " rad\n"
+        << "Ray count: " << measurement_count_ << '\n';
 }
 
 double FanBeamGeometry::angle(int view) const {

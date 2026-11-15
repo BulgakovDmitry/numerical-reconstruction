@@ -3,6 +3,7 @@
 
 #include "linalg.hpp"
 
+#include <iosfwd>
 #include <optional>
 
 namespace NumReconstruction {
@@ -32,6 +33,7 @@ class Grid2D {
 public:
     Grid2D(int pixels_x, int pixels_y, double width, double height);
     [[nodiscard]] static Grid2D from_config(const Config& config);
+    void dump(std::ostream& out) const;
 
     [[nodiscard]] int get_pixels_x() const noexcept { return pixels_x_; }
     [[nodiscard]] int get_pixels_y() const noexcept { return pixels_y_; }
@@ -66,6 +68,9 @@ private:
 class Ray2D {
 public:
     Ray2D(Vec2 source, Vec2 detector);
+    void dump(std::ostream& out) const;
+    // Include the segment's intersection with a given closed rectangular area.
+    void dump(std::ostream& out, const Bounds2D& bounds) const;
     [[nodiscard]] const Vec2& get_source() const noexcept { return source_; }
     [[nodiscard]] const Vec2& get_detector() const noexcept { return detector_; }
     [[nodiscard]] Vec2 displacement() const noexcept { return detector_ - source_; }

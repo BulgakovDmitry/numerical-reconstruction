@@ -22,6 +22,7 @@ public:
                     double start_angle = 0.0,
                     double scan_angle = 2.0 * std::numbers::pi);
     [[nodiscard]] static FanBeamGeometry from_config(const Config& config);
+    void dump(std::ostream& out) const;
 
     [[nodiscard]] double get_radius() const noexcept { return radius_; }
     [[nodiscard]] double get_detector_distance() const noexcept { return detector_distance_; }

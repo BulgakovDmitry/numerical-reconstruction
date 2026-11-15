@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <ostream>
 #include <stdexcept>
 
 namespace NumReconstruction {
@@ -44,6 +45,17 @@ Grid2D::Grid2D(int pixels_x, int pixels_y, double width, double height)
 Grid2D Grid2D::from_config(const Config& config) {
     return {config.get_pixels_x(), config.get_pixels_y(),
             config.get_image_width(), config.get_image_height()};
+}
+
+void Grid2D::dump(std::ostream& out) const {
+    const auto box = bounds();
+    out << "Grid:\n"
+        << "Pixels: " << pixels_x_ << " x " << pixels_y_ << '\n'
+        << "Image size: " << width_ << " x " << height_ << " m\n"
+        << "Pixel count: " << pixel_count_ << '\n'
+        << "Pixel spacing (x, y): " << hx_ << ", " << hy_ << " m\n"
+        << "Grid bounds: x=[" << box.xmin << ", " << box.xmax
+        << "], y=[" << box.ymin << ", " << box.ymax << "] m\n";
 }
 
 Bounds2D Grid2D::bounds() const noexcept {
@@ -119,6 +131,26 @@ Ray2D::Ray2D(Vec2 source, Vec2 detector)
     length_ = std::hypot(delta.x(), delta.y());
     if (!delta.allFinite() || !std::isfinite(length_) || length_ <= 0.0) {
         throw std::invalid_argument("Ray2D: segment must have finite positive length");
+    }
+}
+
+void Ray2D::dump(std::ostream& out) const {
+    out << "Ray:\n"
+        << "Source (x, y): " << source_.transpose() << " m\n"
+        << "Detector (x, y): " << detector_.transpose() << " m\n"
+        << "Source-detector length: " << length_ << " m\n";
+}
+
+void Ray2D::dump(std::ostream& out, const Bounds2D& box) const {
+    const auto interval = clip_ray_to_box(*this, box);
+    dump(out);
+    if (interval) {
+        out << "Entry point (x, y): " << point_at(interval->t_enter).transpose() << " m\n"
+            << "Exit point (x, y): " << point_at(interval->t_exit).transpose() << " m\n"
+            << "Path length inside grid: "
+            << (interval->t_exit - interval->t_enter) * length_ << " m\n";
+    } else {
+        out << "Ray does not cross the grid.\n";
     }
 }
 
