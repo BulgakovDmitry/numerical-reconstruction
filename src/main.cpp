@@ -59,7 +59,10 @@ int main(int argc, char* argv[]) {
         std::cout << "Ideal measurements: " << b.size() << '\n';
 
         // 7. Build regularization matrix
-       
+        const auto L = NumReconstruction::build_regularization_matrix(
+            grid, config.get_regularization_type());
+        std::cout << "\nRegularization matrix: " << L.rows() << " x " << L.cols() << '\n'
+                  << "Nonzero elements: " << L.nonZeros() << '\n';
 
     } catch (const std::invalid_argument& error) {
         std::cerr << "Error: " << error.what() << '\n'
