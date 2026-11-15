@@ -31,7 +31,7 @@ public:
     [[nodiscard]] double get_start_angle() const noexcept { return start_angle_; }
     [[nodiscard]] double get_scan_angle() const noexcept { return scan_angle_; }
     [[nodiscard]] double get_half_fan_angle() const noexcept { return half_fan_angle_; }
-    [[nodiscard]] Index measurement_count() const noexcept { return measurement_count_; }
+    [[nodiscard]] Index get_measurement_count() const noexcept { return measurement_count_; }
 
     [[nodiscard]] double angle(int view) const;
     [[nodiscard]] double fan_angle(int detector) const;
