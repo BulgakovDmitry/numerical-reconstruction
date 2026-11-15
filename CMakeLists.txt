@@ -7,8 +7,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
 
+# ════ Eigen ═══════════════════════════════════════════════════════
+find_package(Eigen3 QUIET NO_MODULE)
+if(NOT Eigen3_FOUND)
+    message(FATAL_ERROR
+        "Eigen3 not found. Install it (macOS: brew install eigen, "
+        "Ubuntu: sudo apt install libeigen3-dev) or pass "
+        "-DEigen3_DIR=<directory containing Eigen3Config.cmake>.")
+endif()
+# ══════════════════════════════════════════════════════════════════
+
+# ════ Executable ══════════════════════════════════════════════════
 add_executable(numerical-reconstruction
     src/tools.cpp
     src/config.cpp
@@ -16,6 +29,7 @@ add_executable(numerical-reconstruction
     src/scanner.cpp
     src/projector.cpp
     src/main.cpp
+    src/io.cpp
 )
 
 target_include_directories(numerical-reconstruction PRIVATE
@@ -23,3 +37,5 @@ target_include_directories(numerical-reconstruction PRIVATE
 )
 
 target_link_libraries(numerical-reconstruction PRIVATE Eigen3::Eigen)
+
+

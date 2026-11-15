@@ -2,7 +2,11 @@
 #include "tools.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <cerrno>
 #include <charconv>
+#include <cmath>
+#include <cstdlib>
 #include <ostream>
 #include <stdexcept>
 #include <string>
@@ -368,7 +372,33 @@ void Config::dump(std::ostream& out) const {
 template <typename T>
 static T parse_number(const std::string_view text, const std::string_view option) {
     T value{};
-    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    const char* end = text.data();
+    std::errc error{};
+
+    if constexpr (std::is_floating_point_v<T>) {
+        // libc++ shipped with Apple clang (<= 15) lacks std::from_chars for double,
+        // so floating-point values are parsed with strtod under the same rules:
+        // no leading whitespace and no '+' sign.
+        const std::string buffer(text);
+        char* parse_end = nullptr;
+        if (!buffer.empty() && !std::isspace(static_cast<unsigned char>(buffer.front())) && buffer.front() != '+') {
+            errno = 0;
+            value = static_cast<T>(std::strtod(buffer.c_str(), &parse_end));
+        }
+        if (parse_end == nullptr || parse_end == buffer.c_str()) {
+            error = std::errc::invalid_argument;
+        } else {
+            end = text.data() + (parse_end - buffer.c_str());
+            if (errno == ERANGE) {
+                error = std::errc::result_out_of_range;
+            }
+        }
+    } else {
+        const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
+        end   = result.ptr;
+        error = result.ec;
+    }
+
     if (error == std::errc::result_out_of_range) {
         throw std::invalid_argument(std::string(option) + ": number out of range: '" + std::string(text) + "'");
     }
