@@ -13,6 +13,7 @@ add_executable(numerical-reconstruction
     src/config.cpp
     src/geometry.cpp
     src/scanner.cpp
+    src/projector.cpp
     src/main.cpp
 )
 

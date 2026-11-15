@@ -15,4 +15,7 @@
 - `validate_geometry` uses sufficient conditions for the circumscribed circle:
   `R > rho`, `d > R+rho`, `half_fan_angle >= asin(rho/R)`. These are conservative
   for partial scans and do not guarantee sufficient discrete measurements.
+- `SiddonProjector::trace_ray` follows the pixel ownership rule above: paths
+  along internal grid lines are counted on one side; paths along the external
+  right/bottom edges are excluded. Misses and point contacts give no entries.
 
