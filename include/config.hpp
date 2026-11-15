@@ -14,6 +14,7 @@ public:
         ZeroOrder,   
         FirstOrder,
     };
+
 private:
     // ════ Image grid ══════════════════════════════════════════════
     int pixels_x_ = 256;

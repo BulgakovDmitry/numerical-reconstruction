@@ -242,7 +242,6 @@ Config Config::from_command_line(const int argc, const char* const argv[]) {
             throw std::invalid_argument("Unknown option: " + option);
         }
     }
-
     return builder.build();
 }
 
@@ -270,18 +269,19 @@ void Config::print_help(std::ostream& out) {
         << "  --lambda X                 Regularization weight (>= 0); default: " << defaults.lambda_ << '\n'
         << "  --regularization TYPE      zero-order or first-order; default: "
         << (defaults.regularization_ == RegularizationType::ZeroOrder ? "zero-order" : "first-order") << '\n'
-        << "  --epsilon X                Solver tolerance (> 0); default: " << defaults.epsilon_ << '\n'
+        << "  --epsilon X                Relative normal-equation residual (> 0); default: " << defaults.epsilon_ << '\n'
         << "  --max-iterations N         Iteration limit (> 0); default: " << defaults.max_iterations_ << '\n'
         << "\nMeasurement simulation:\n"
         << "  --poisson-noise            Enable Poisson noise\n"
         << "  --no-poisson-noise         Disable Poisson noise; default: "
         << (defaults.use_poisson_noise_ ? "enabled" : "disabled") << '\n'
-        << "  --incident-photon-count X  Incident photons (> 0); default: " << defaults.incident_photon_count_ << '\n'
+        << "  --incident-photon-count X  Incident photons (0 < X <= 1e12 for noise); default: " << defaults.incident_photon_count_ << '\n'
         << "  --random-seed N            Seed (0..4294967295); default: " << defaults.random_seed_ << '\n'
         << "\nInput / Output:\n"
-        << "  --input PATH               Input image; default: " << defaults.input_path_ << '\n'
+        << "  --input PATH               PGM image matching the grid; default: " << defaults.input_path_ << '\n'
         << "  --output PATH              Output directory; default: " << defaults.output_directory_ << '\n'
-        << "\n  -h, --help                 Show this help (use on its own)\n";
+        << "\n  -h, --help                 Show this help (use on its own)\n"
+        << "\nExit codes: 0 = converged, 1 = error, 2 = iteration limit reached.\n";
 }
 // ══════════════════════════════════════════════════════════════════
 
@@ -320,8 +320,8 @@ void Config::validate() const {
     Tools::require_positive(max_iterations_,        "Config: max_iterations"       );
     Tools::require_positive(incident_photon_count_, "Config: incident_photon_count");
 
-    if (input_path_.empty()) {
-        throw std::invalid_argument("Config: input_path must not be empty");
+    if (use_poisson_noise_ && incident_photon_count_ > 1e12) {
+        throw std::invalid_argument("Config: incident_photon_count must not exceed 1e12 for Poisson noise");
     }
     if (output_directory_.empty()) {
         throw std::invalid_argument("Config: output_directory must not be empty");
@@ -376,9 +376,6 @@ static T parse_number(const std::string_view text, const std::string_view option
     std::errc error{};
 
     if constexpr (std::is_floating_point_v<T>) {
-        // libc++ shipped with Apple clang (<= 15) lacks std::from_chars for double,
-        // so floating-point values are parsed with strtod under the same rules:
-        // no leading whitespace and no '+' sign.
         const std::string buffer(text);
         char* parse_end = nullptr;
         if (!buffer.empty() && !std::isspace(static_cast<unsigned char>(buffer.front())) && buffer.front() != '+') {

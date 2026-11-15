@@ -13,8 +13,6 @@ struct MeasurementIndex {
     bool operator==(const MeasurementIndex&) const = default;
 };
 
-// Detector arc is centered at the source, following the explicit README formula.
-// Views sample [start_angle,start_angle+scan_angle); detectors sample bin centers.
 class FanBeamGeometry {
 public:
     FanBeamGeometry(double radius, double detector_distance,
@@ -52,10 +50,6 @@ private:
     Index measurement_count_;
 };
 
-// Conservative sufficient conditions using the circumscribed circle of the grid.
-// Also applied to partial scans; does not guarantee enough discrete measurements.
-// Throws std::invalid_argument if source clearance, detector distance or fan
-// aperture is insufficient. Constructors do not invoke this cross-object check.
 void validate_geometry(const Grid2D& grid, const FanBeamGeometry& scanner);
 
 } // namespace NumReconstruction
