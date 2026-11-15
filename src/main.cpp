@@ -16,7 +16,27 @@
 #include <locale>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <string_view>
+#include <vector>
+
+namespace {
+
+// One conjugate gradient iteration, recorded for the visualization.
+struct IterationRecord {
+    int iteration;
+    double relative_residual;
+    double rmse;
+    bool frame_saved;
+};
+
+std::string iteration_frame_name(const int iteration) {
+    std::ostringstream name;
+    name << "iter_" << std::setw(4) << std::setfill('0') << iteration << ".pgm";
+    return name.str();
+}
+
+} // namespace
 
 int main(int argc, char* argv[]) {
     using NumReconstruction::Config;
@@ -78,11 +98,37 @@ int main(int argc, char* argv[]) {
                   << "Nonzero elements: " << L.nonZeros() << '\n';
 
         // 8. Reconstruct the attenuation image
+        const auto output = config.get_output_directory();
+        const auto iterations_directory = output / "iterations";
+        const int save_step = config.get_iteration_save_step();
+        std::vector<IterationRecord> history;
+        double frame_seconds = 0.0;
+
+        NumReconstruction::IterationCallback on_iteration;
+        if (save_step > 0) {
+            on_iteration = [&](const int iteration, const NumReconstruction::Vector& mu,
+                               const double relative_residual) {
+                const auto frame_start = Clock::now();
+                const bool save_frame = iteration % save_step == 0;
+                if (save_frame) {
+                    NumReconstruction::save_image(iterations_directory / iteration_frame_name(iteration),
+                        mu, grid.get_pixels_x(), grid.get_pixels_y(), mu_max);
+                }
+                const double rmse = (mu - mu_true).stableNorm()
+                                  / std::sqrt(static_cast<double>(mu_true.size()));
+                history.push_back({iteration, relative_residual, rmse, save_frame});
+                frame_seconds += std::chrono::duration<double>(Clock::now() - frame_start).count();
+            };
+        }
+
         std::cout << "Solving the inverse problem..." << std::endl;
         const auto solve_start = Clock::now();
         const auto result = NumReconstruction::solve_tikhonov(
-            A, b, L, config.get_lambda(), config.get_epsilon(), config.get_max_iterations());
-        const double solve_seconds = std::chrono::duration<double>(Clock::now() - solve_start).count();
+            A, b, L, config.get_lambda(), config.get_epsilon(), config.get_max_iterations(),
+            on_iteration);
+        // Frame output is excluded so the reported solver time stays comparable.
+        const double solve_seconds =
+            std::chrono::duration<double>(Clock::now() - solve_start).count() - frame_seconds;
 
         // 9. Evaluate the reconstruction
         const NumReconstruction::Vector image_error = result.mu - mu_true;
@@ -114,7 +160,6 @@ int main(int argc, char* argv[]) {
         std::cout << '\n' << summary.str();
 
         // 10. Save images, sinograms and the report
-        const auto output = config.get_output_directory();
         NumReconstruction::save_image(output / "original.pgm", mu_true,
             grid.get_pixels_x(), grid.get_pixels_y(), mu_max);
         NumReconstruction::save_image(output / "reconstructed.pgm", result.mu,
@@ -128,6 +173,28 @@ int main(int argc, char* argv[]) {
         NumReconstruction::save_sinogram(output / "ideal_sinogram.csv", ideal_b,
             config.get_num_angles(), config.get_num_detectors());
 
+        // Iteration frames: history.csv lists every iteration of this run and names the
+        // saved frames, so stale frames from earlier runs in the same directory are ignored.
+        if (!history.empty()) {
+            // Always keep the final iterate, so the animation ends on the saved result.
+            if (!history.back().frame_saved) {
+                NumReconstruction::save_image(iterations_directory
+                    / iteration_frame_name(history.back().iteration),
+                    result.mu, grid.get_pixels_x(), grid.get_pixels_y(), mu_max);
+                history.back().frame_saved = true;
+            }
+
+            std::ostringstream csv;
+            csv.imbue(std::locale::classic());
+            csv << std::setprecision(std::numeric_limits<double>::max_digits10)
+                << "iteration,relative_residual,rmse,frame\n";
+            for (const auto& record : history) {
+                csv << record.iteration << ',' << record.relative_residual << ',' << record.rmse << ','
+                    << (record.frame_saved ? iteration_frame_name(record.iteration) : "") << '\n';
+            }
+            NumReconstruction::save_report(iterations_directory / "history.csv", csv.str());
+        }
+
         std::ostringstream report;
         report.imbue(std::locale::classic());
         report << std::setprecision(std::numeric_limits<double>::max_digits10);
@@ -140,6 +207,10 @@ int main(int argc, char* argv[]) {
                << "CSV images and metrics preserve the raw solution, without clipping.\n"
                << "Image CSV: rows from top to bottom, columns from left to right.\n"
                << "Sinogram CSV: rows are views, columns are detectors; entries are logarithmic measurements.\n";
+        if (!history.empty()) {
+            report << "Iteration frames: iterations/iter_NNNN.pgm (same scale as the PGM images);\n"
+                   << "iterations/history.csv lists every iteration with its residual, RMSE and frame.\n";
+        }
         NumReconstruction::save_report(output / "report.txt", report.str());
         std::cout << "\nResults saved to: " << output << '\n';
 

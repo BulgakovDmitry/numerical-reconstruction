@@ -47,6 +47,7 @@ std::uint32_t Config::get_random_seed          () const noexcept { return random
 
 std::filesystem::path Config::get_input_path      () const { return input_path_;       }
 std::filesystem::path Config::get_output_directory() const { return output_directory_; }
+int Config::get_iteration_save_step() const noexcept { return iteration_save_step_; }
 // ══════════════════════════════════════════════════════════════════
 
 
@@ -162,6 +163,11 @@ Config::Builder& Config::Builder::set_output_directory(const std::filesystem::pa
     config_.output_directory_ = output_directory;
     return *this;
 }
+
+Config::Builder& Config::Builder::set_iteration_save_step(const int iteration_save_step) {
+    config_.iteration_save_step_ = iteration_save_step;
+    return *this;
+}
 // ══════════════════════════════════════════════════════════════════
 
 
@@ -238,6 +244,8 @@ Config Config::from_command_line(const int argc, const char* const argv[]) {
             builder.set_input_path(std::filesystem::path(next_value()));
         } else if (option == "--output") {
             builder.set_output_directory(std::filesystem::path(next_value()));
+        } else if (option == "--save-iterations") {
+            builder.set_iteration_save_step(parse_number<int>(next_value(), option));
         } else {
             throw std::invalid_argument("Unknown option: " + option);
         }
@@ -280,6 +288,9 @@ void Config::print_help(std::ostream& out) {
         << "\nInput / Output:\n"
         << "  --input PATH               PGM image matching the grid; default: " << defaults.input_path_ << '\n'
         << "  --output PATH              Output directory; default: " << defaults.output_directory_ << '\n'
+        << "  --save-iterations N        Save every N-th solver iterate to <output>/iterations\n"
+        << "                             for the visualization (>= 0, 0 = off); default: "
+        << defaults.iteration_save_step_ << '\n'
         << "\n  -h, --help                 Show this help (use on its own)\n"
         << "\nExit codes: 0 = converged, 1 = error, 2 = iteration limit reached.\n";
 }
@@ -326,6 +337,9 @@ void Config::validate() const {
     if (output_directory_.empty()) {
         throw std::invalid_argument("Config: output_directory must not be empty");
     }
+    if (iteration_save_step_ < 0) {
+        throw std::invalid_argument("Config: iteration_save_step must be nonnegative");
+    }
 }
 // ══════════════════════════════════════════════════════════════════
 
@@ -363,7 +377,8 @@ void Config::dump(std::ostream& out) const {
         << "Incident photon count: " << incident_photon_count_ << '\n'
         << "Random seed: " << random_seed_ << '\n'
         << "Input path: " << input_path_ << '\n'
-        << "Output directory: " << output_directory_ << '\n';
+        << "Output directory: " << output_directory_ << '\n'
+        << "Iteration save step: " << iteration_save_step_ << '\n';
 }
 // ══════════════════════════════════════════════════════════════════
 
