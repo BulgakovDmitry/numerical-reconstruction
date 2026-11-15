@@ -21,14 +21,21 @@ if(NOT Eigen3_FOUND)
 endif()
 # ══════════════════════════════════════════════════════════════════
 
-
 # ════ Executable ══════════════════════════════════════════════════
 add_executable(numerical-reconstruction
+    src/tools.cpp
     src/config.cpp
-    src/io.cpp
+    src/geometry.cpp
+    src/scanner.cpp
+    src/projector.cpp
     src/main.cpp
+    src/io.cpp
 )
-target_include_directories(numerical-reconstruction PRIVATE include)
+
+target_include_directories(numerical-reconstruction PRIVATE
+    include
+)
+
 target_link_libraries(numerical-reconstruction PRIVATE Eigen3::Eigen)
-target_compile_options(numerical-reconstruction PRIVATE -Wall -Wextra -Wpedantic)
-# ══════════════════════════════════════════════════════════════════
+
+
