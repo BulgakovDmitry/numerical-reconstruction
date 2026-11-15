@@ -33,7 +33,7 @@ SiddonProjector::SiddonProjector(Grid2D grid, FanBeamGeometry geometry)
     : grid_(std::move(grid)), geometry_(std::move(geometry)) {
     validate_geometry(grid_, geometry_);
     const auto limit = std::numeric_limits<SparseMatrix::StorageIndex>::max();
-    if (grid_.pixel_count() > limit || geometry_.measurement_count() > limit) {
+    if (grid_.pixel_count() > limit || geometry_.get_measurement_count() > limit) {
         throw std::overflow_error("SiddonProjector: matrix dimensions exceed sparse storage index range");
     }
 }
@@ -128,7 +128,7 @@ const SparseMatrix& SiddonProjector::build_system_matrix() {
     }
 
     // Build locally so a failed allocation does not leave a partial cached matrix.
-    SparseMatrix matrix(geometry_.measurement_count(), grid_.pixel_count());
+    SparseMatrix matrix(geometry_.get_measurement_count(), grid_.pixel_count());
     matrix.setFromTriplets(entries.begin(), entries.end());
     matrix.makeCompressed();
     system_matrix_.emplace(std::move(matrix));
@@ -160,7 +160,7 @@ Vector SiddonProjector::backproject(const Vector& measurements) const {
 
 void SiddonProjector::dump(std::ostream& out) const {
     out << "Siddon projector:\n"
-        << "System matrix size: " << geometry_.measurement_count()
+        << "System matrix size: " << geometry_.get_measurement_count()
         << " x " << grid_.pixel_count() << '\n'
         << "System matrix built: " << (system_matrix_ ? "true" : "false") << '\n';
     if (system_matrix_) {
