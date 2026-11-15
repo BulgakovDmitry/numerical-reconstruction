@@ -1,0 +1,7 @@
+name,width,height,nonzero_pixels,distinct_gray_values
+00_empty,64,64,0,0
+01_uniform_disk,64,64,655,0;153
+02_two_materials,64,64,374,0;85;210
+03_rectangles_rotated,64,64,427,0;75;190
+04_suitcase,64,64,1052,0;42;72;94;115;150;184;220
+05_fine_details,64,64,393,0;120;185;235

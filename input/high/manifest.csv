@@ -1,0 +1,10 @@
+name,description_ru,formats,resolution_1,resolution_2,interpretation
+00_empty,Пустой фантом; проверка нулевых проекций,"PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
+01_uniform_disk,Однородный круг; проверка пересечений и реконструкции,"PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
+02_two_materials,Несколько областей с различным ослаблением,"PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
+03_rectangles_rotated,Наклонные прямоугольники и границы,"PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
+04_suitcase,"Чемодан с одеждой, планшетом, бутылкой и мелкими предметами","PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
+05_fine_details,"Кольца, тонкие провода, мелкие детали","PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
+06_nested_materials,Вложенные материалы и полости,"PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
+07_packed_suitcase,Плотно заполненный чемодан с деталями,"PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
+08_resolution_target,Контрастная мишень для оценки разрешения,"PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
