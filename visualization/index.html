@@ -1,0 +1,1862 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>КТ-досмотр багажа</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0e15;
+    --surface: #1a2333;
+    --border: rgba(148, 163, 184, 0.24);
+    --text: #e5ebf3;
+    --muted: #93a1b5;
+    --accent: #38bdf8;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  .app {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding-block: 12px;
+    padding-inline: 16px;
+  }
+  .viewer, .controls { width: min(100%, calc((100vh - 112px) * 16 / 9)); }
+  .viewer { position: relative; }
+  .stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #dfe7ef;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+  .stage:fullscreen { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; background: #000; }
+  .stage canvas { display: block; width: 100%; height: 100%; }
+  .stage.dragging::after {
+    content: "Отпустите папку output";
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(10, 14, 21, 0.75);
+    border: 3px dashed var(--accent);
+    border-radius: 14px;
+    color: #fff;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  button, select {
+    font: inherit;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  button:hover, select:hover { border-color: var(--accent); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .icon { min-width: 42px; }
+  #timeline { flex: 1 1 200px; min-width: 0; accent-color: var(--accent); }
+  .clock { min-width: 92px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
+  .status { flex-basis: 100%; min-height: 1.45em; color: var(--muted); font-size: 13px; }
+  .status.error { color: var(--danger); }
+  .start-card {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(92%, 520px);
+    padding: 22px 24px;
+    background: rgba(15, 21, 32, 0.95);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.5);
+  }
+  .start-card h2 { margin: 0 0 8px; font-size: 20px; }
+  .start-card p { margin: 0 0 14px; color: var(--muted); }
+  .start-card code { color: var(--text); background: rgba(148, 163, 184, 0.14); padding: 1px 5px; border-radius: 4px; }
+  .start-card .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .primary { background: #0ea5e9; border-color: #0ea5e9; color: #04121c; font-weight: 600; }
+  .primary:hover { background: #38bdf8; }
+  @media (max-width: 640px) {
+    .start-card { position: static; transform: none; width: auto; margin-top: 10px; padding: 16px; }
+    #timeline { order: -1; flex-basis: 100%; }
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main class="app">
+  <div class="viewer">
+    <div class="stage" id="stage">
+      <canvas id="scene" role="img"
+              aria-label="Анимация: человек кладёт чемодан на ленту, чемодан проезжает через КТ-сканер, на мониторе строится реконструкция среза"></canvas>
+    </div>
+    <div class="start-card" id="startCard" hidden>
+      <h2>Откройте результаты расчёта</h2>
+      <p>Запустите программу с флагом <code>--save-iterations 1</code>, затем выберите папку
+        <code>output</code> или перетащите её на страницу.</p>
+      <div class="actions">
+        <button class="primary" id="startOpen" type="button">Открыть папку output…</button>
+        <button id="startWithout" type="button">Смотреть без данных</button>
+      </div>
+    </div>
+  </div>
+  <div class="controls">
+    <button class="icon" id="play" type="button" aria-label="Пуск" title="Пуск / пауза (пробел)">▶</button>
+    <button class="icon" id="restart" type="button" aria-label="Сначала" title="Сначала (R)">⟲</button>
+    <input id="timeline" type="range" min="0" max="1000" step="1" value="0" aria-label="Время анимации">
+    <span class="clock" id="clock">0:00 / 0:00</span>
+    <select id="speed" aria-label="Скорость">
+      <option value="0.5">0,5×</option>
+      <option value="1" selected>1×</option>
+      <option value="1.5">1,5×</option>
+      <option value="2">2×</option>
+    </select>
+    <label class="toggle" title="Палитра (P)"><input type="checkbox" id="palette"> Псевдоцвет</label>
+    <button id="open" type="button">Открыть папку…</button>
+    <button class="icon" id="fullscreen" type="button" aria-label="Во весь экран" title="Во весь экран (F)">⛶</button>
+    <input id="folder" type="file" webkitdirectory directory multiple hidden>
+    <div class="status" id="status" role="status"></div>
+  </div>
+</main>
+<noscript>Для анимации нужен JavaScript.</noscript>
+<script>
+'use strict';
+
+/*
+ * Airport CT scene driven by the results of numerical-reconstruction.
+ *
+ * Input: the program's output directory.
+ *   sinogram.csv            measured line integrals b; rows = views, columns = detectors
+ *   reconstructed.pgm       final solution on the fixed scale [0, mu_max]
+ *   original.pgm            ground truth (optional)
+ *   report.txt              configuration and metrics (optional; geometry is read from it)
+ *   iterations/history.csv  residual and RMSE of every iteration, names of saved frames
+ *   iterations/iter_*.pgm   solver iterates (run the program with --save-iterations N)
+ *
+ * Served over HTTP, the page fetches ../output/ (or ?data=<url>); opened as a local
+ * file it asks for the folder (button or drag and drop).
+ * URL parameters: ?t=<seconds> opens paused at that moment, ?palette=pseudo.
+ */
+
+// ════ Scene layout (logical canvas units, 1280 x 720) ══════════════
+const W = 1280;
+const H = 720;
+const FLOOR = 690;
+const WALL_BASE = 648;
+const BELT_TOP = 612;
+const BELT_X0 = 262;
+const BELT_X1 = 1160;
+const SC = {
+  x0: 560, x1: 860, top: 466,
+  winX0: 628, winX1: 792, winY0: 496, winY1: 628,
+  ringX: 710, ringY: 562, ringRx: 12, ringRy: 60,
+};
+const BAG_HEIGHT = 83;            // from the handle grip to the wheel contact
+const BAG_COLOR = '#c2410c';
+const MAN_START_X = -70;
+const MAN_PLACE_X = 250;
+const MAN_PICK_X = 1030;
+const MAN_END_X = 1470;
+const BAG_PLACE_X = 300;
+const BAG_EXIT_X = 1080;
+const BELT_SPEED = 125;           // px/s
+const WALK_SPEED = 135;           // px/s
+const STRIDE = 112;               // px per gait cycle
+const MAN = { headR: 12, neck: 5, torso: 58, thigh: 46, shin: 46, foot: 4, upper: 31, fore: 29 };
+const INSET = { x: 24, y: 84, w: 300, h: 288 };
+const MON = { x: 352, y: 18, w: 904, h: 356 };
+const SCREEN = { x: MON.x + 14, y: MON.y + 14, w: MON.w - 28, h: MON.h - 28 };
+const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const DEFAULT_GEOMETRY = {
+  radius: 2.5, detectorDistance: 5.5, halfFan: 35 * Math.PI / 180,
+  startAngle: 0, scanAngle: 2 * Math.PI, imageWidth: 2, imageHeight: 2,
+  views: 360, detectors: 256,
+};
+const STAGES = {
+  idle:     { label: 'ОЖИДАНИЕ',      color: '#94a3b8' },
+  incoming: { label: 'ПОДАЧА',        color: '#38bdf8' },
+  scan:     { label: 'СКАНИРОВАНИЕ',  color: '#f59e0b' },
+  recon:    { label: 'РЕКОНСТРУКЦИЯ', color: '#a78bfa' },
+  done:     { label: 'ГОТОВО',        color: '#4ade80' },
+};
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Math helpers ═════════════════════════════════════════════════
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const lerpPoint = (a, b, p) => ({ x: lerp(a.x, b.x, p), y: lerp(a.y, b.y, p) });
+const smoothstep = (e0, e1, x) => { const p = clamp((x - e0) / (e1 - e0), 0, 1); return p * p * (3 - 2 * p); };
+const easeInOutSine = p => 0.5 - 0.5 * Math.cos(Math.PI * clamp(p, 0, 1));
+const span = (start, duration) => ({ start, end: start + duration });
+const prog = (s, t) => clamp((t - s.start) / (s.end - s.start), 0, 1);
+
+// Trapezoidal velocity profile: accelerate, cruise, decelerate (a = ramp fraction).
+function easeTrap(p, a = 0.18) {
+  p = clamp(p, 0, 1);
+  const v = 1 / (1 - a);
+  if (p < a) return 0.5 * v / a * p * p;
+  if (p > 1 - a) return 1 - 0.5 * v / a * (1 - p) * (1 - p);
+  return 0.5 * v * a + v * (p - a);
+}
+// Already moving at the start, decelerates at the end.
+function easeOutTrap(p, a = 0.25) {
+  p = clamp(p, 0, 1);
+  const v = 1 / (1 - a / 2);
+  return p < 1 - a ? v * p : 1 - 0.5 * v / a * (1 - p) * (1 - p);
+}
+const easeInTrap = (p, a = 0.25) => 1 - easeOutTrap(1 - p, a);
+
+function quadPoint(p0, p1, p2, u) {
+  const a = (1 - u) * (1 - u), b = 2 * u * (1 - u), c = u * u;
+  return { x: a * p0.x + b * p1.x + c * p2.x, y: a * p0.y + b * p1.y + c * p2.y };
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Formatting (Russian conventions) ═════════════════════════════
+const RU = new Intl.NumberFormat('ru-RU');
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const sup = n => String(n).split('').map(ch => SUP[ch] ?? ch).join('');
+const fmtInt = n => (Number.isFinite(n) ? RU.format(Math.round(n)) : '—');
+const fmtFixed = (x, digits) => (Number.isFinite(x) ? x.toFixed(digits).replace('.', ',') : '—');
+
+function fmtNumber(x) {
+  if (!Number.isFinite(x)) return '—';
+  if (x !== 0 && (Math.abs(x) < 1e-3 || Math.abs(x) >= 1e5)) return fmtSci(x);
+  return String(Number(x.toPrecision(4))).replace('.', ',');
+}
+function fmtSci(x) {
+  if (!Number.isFinite(x)) return '—';
+  if (x === 0) return '0';
+  let e = Math.floor(Math.log10(Math.abs(x)));
+  if (e >= -2 && e <= 3) return fmtNumber(x);
+  let m = x / 10 ** e;
+  if (Math.abs(m) >= 9.95) { m /= 10; e += 1; }
+  return `${m.toFixed(1).replace('.', ',')}·10${sup(e)}`;
+}
+const fmtDeg = theta => `${Math.round(((theta * 180 / Math.PI) % 360 + 360) % 360)}°`;
+const fmtClock = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Color maps ═══════════════════════════════════════════════════
+function buildLut(stops) {
+  const lut = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const v = i / 255;
+    let k = 0;
+    while (k < stops.length - 2 && v > stops[k + 1][0]) k++;
+    const [v0, c0] = stops[k];
+    const [v1, c1] = stops[k + 1];
+    const p = clamp((v - v0) / (v1 - v0), 0, 1);
+    for (let j = 0; j < 3; j++) lut[3 * i + j] = Math.round(lerp(c0[j], c1[j], p));
+  }
+  return lut;
+}
+const LUTS = {
+  gray: buildLut([[0, [0, 0, 0]], [1, [255, 255, 255]]]),
+  // Airport-style pseudo color (conventional): organic -> orange, mixed -> green, dense -> blue.
+  pseudo: buildLut([
+    [0, [0, 0, 0]], [0.06, [40, 22, 8]], [0.3, [235, 140, 45]],
+    [0.55, [90, 200, 95]], [0.8, [70, 145, 255]], [1, [225, 238, 255]],
+  ]),
+};
+
+function mixColor(a, b, p) {
+  const c = a.map((v, i) => Math.round(lerp(v, b[i], clamp(p, 0, 1))));
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ State ════════════════════════════════════════════════════════
+const els = {
+  stage: document.getElementById('stage'),
+  canvas: document.getElementById('scene'),
+  startCard: document.getElementById('startCard'),
+  startOpen: document.getElementById('startOpen'),
+  startWithout: document.getElementById('startWithout'),
+  play: document.getElementById('play'),
+  restart: document.getElementById('restart'),
+  timeline: document.getElementById('timeline'),
+  clock: document.getElementById('clock'),
+  speed: document.getElementById('speed'),
+  palette: document.getElementById('palette'),
+  open: document.getElementById('open'),
+  folder: document.getElementById('folder'),
+  fullscreen: document.getElementById('fullscreen'),
+  status: document.getElementById('status'),
+};
+const ctx = els.canvas.getContext('2d');
+const state = { t: 0, playing: false, speed: 1, last: null, dirty: true, palette: 'gray', data: null, scrubbing: false };
+const cache = { images: new Map(), sinogram: null, silhouette: null, colorbar: null };
+let TL = buildTimeline(null);
+let view = { k: 1, ox: 0, oy: 0 };
+let initialTime = null;
+
+const geometry = () => (state.data ? state.data.geometry : DEFAULT_GEOMETRY);
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Timeline ═════════════════════════════════════════════════════
+function buildTimeline(data) {
+  const tl = {};
+  tl.walkIn = span(0.6, (MAN_PLACE_X - MAN_START_X) / WALK_SPEED * 1.12);
+  tl.place = span(tl.walkIn.end + 0.15, 2.0);
+  tl.release = span(tl.place.end, 0.6);
+  tl.convey = span(tl.release.end + 0.2, (SC.ringX - BAG_PLACE_X) / BELT_SPEED * 1.18);
+  tl.scan = span(tl.convey.end + 0.35, 8.0);
+  tl.exit = span(tl.scan.end + 0.3, (BAG_EXIT_X - SC.ringX) / BELT_SPEED * 1.18);
+  const frames = data && data.frames.length ? data.frames.length : 30;
+  tl.recon = span(tl.exit.start, clamp(frames * 0.16, 4.5, 8));
+  tl.walkToExit = span(tl.exit.start + 0.7, (MAN_PICK_X - MAN_PLACE_X) / WALK_SPEED * 1.18);
+  tl.pickup = span(Math.max(tl.walkToExit.end, tl.exit.end) + 0.15, 2.0);
+  tl.reveal = span(tl.recon.end, 1.4);
+  tl.walkOff = span(Math.max(tl.pickup.end, tl.reveal.end) + 1.2,
+                    (MAN_END_X - MAN_PICK_X) / WALK_SPEED * 1.12);
+  tl.total = tl.walkOff.end + 1.5;
+  return tl;
+}
+
+function stageAt(t) {
+  if (t < TL.place.end) return 'idle';
+  if (t < TL.scan.start) return 'incoming';
+  if (t < TL.scan.end) return 'scan';
+  if (t < TL.recon.end) return 'recon';
+  return 'done';
+}
+
+const pickupLiftStart = () => TL.pickup.start + 0.35 * (TL.pickup.end - TL.pickup.start);
+const bagOnBelt = t => t >= TL.place.end && t < pickupLiftStart();
+
+function bagBeltX(t) {
+  if (t < TL.convey.start) return BAG_PLACE_X;
+  if (t < TL.convey.end) return lerp(BAG_PLACE_X, SC.ringX, easeTrap(prog(TL.convey, t)));
+  if (t < TL.exit.start) return SC.ringX;
+  if (t < TL.exit.end) return lerp(SC.ringX, BAG_EXIT_X, easeTrap(prog(TL.exit, t)));
+  return BAG_EXIT_X;
+}
+// The belt surface moves together with the bag.
+const beltOffset = t => bagBeltX(t) - BAG_PLACE_X;
+const bagPresence = t => (bagOnBelt(t) ? clamp(1 - Math.abs(bagBeltX(t) - SC.ringX) / 70, 0, 1) : 0);
+
+function sourceAngle(t) {
+  const g = geometry();
+  return g.startAngle + prog(TL.scan, t) * g.scanAngle;
+}
+function currentView(t) {
+  const g = geometry();
+  return Math.min(g.views - 1, Math.floor(prog(TL.scan, t) * g.views));
+}
+function sinogramRow(viewIndex) {
+  const s = state.data && state.data.sino;
+  return s ? s.data.subarray(viewIndex * s.cols, (viewIndex + 1) * s.cols) : null;
+}
+function currentFrameIndex(t) {
+  const frames = state.data ? state.data.frames : [];
+  if (!frames.length) return -1;
+  return Math.min(frames.length - 1, Math.floor(prog(TL.recon, t) * frames.length));
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Drawing primitives ═══════════════════════════════════════════
+function rr(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function fillRR(x, y, w, h, r, style) {
+  ctx.fillStyle = style;
+  ctx.beginPath();
+  rr(x, y, w, h, r);
+  ctx.fill();
+}
+function line(x0, y0, x1, y1) {
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+}
+function circle(x, y, r) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+function text(str, x, y, { size = 13, weight = 400, color = '#0f172a', align = 'left', font = FONT } = {}) {
+  ctx.font = `${weight} ${size}px ${font}`;
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(str, x, y);
+}
+// Draws an image canvas into a box, keeping the aspect ratio; pixels stay sharp when enlarged.
+function drawFit(img, x, y, w, h) {
+  const k = Math.min(w / img.width, h / img.height);
+  const dw = img.width * k, dh = img.height * k;
+  const dx = x + (w - dw) / 2, dy = y + (h - dh) / 2;
+  ctx.imageSmoothingEnabled = k < 1.5;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, dx, dy, dw, dh);
+  ctx.imageSmoothingEnabled = true;
+  return { x: dx, y: dy, w: dw, h: dh };
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Image caches ═════════════════════════════════════════════════
+function imageToCanvas(img, lut) {
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const cx = c.getContext('2d');
+  const id = cx.createImageData(img.width, img.height);
+  for (let i = 0; i < img.data.length; i++) {
+    const v = clamp(Math.round(img.data[i] * 255), 0, 255);
+    id.data[4 * i] = lut[3 * v];
+    id.data[4 * i + 1] = lut[3 * v + 1];
+    id.data[4 * i + 2] = lut[3 * v + 2];
+    id.data[4 * i + 3] = 255;
+  }
+  cx.putImageData(id, 0, 0);
+  return c;
+}
+function imageCanvas(key, img) {
+  const k = `${state.palette}:${key}`;
+  if (!cache.images.has(k)) cache.images.set(k, imageToCanvas(img, LUTS[state.palette]));
+  return cache.images.get(k);
+}
+function colorbarCanvas() {
+  if (!cache.colorbar || cache.colorbar.palette !== state.palette) {
+    const ramp = { width: 256, height: 1, data: Float32Array.from({ length: 256 }, (_, i) => i / 255) };
+    cache.colorbar = { palette: state.palette, canvas: imageToCanvas(ramp, LUTS[state.palette]) };
+  }
+  return cache.colorbar.canvas;
+}
+function buildSinogramCanvas(sino, bmax) {
+  const c = document.createElement('canvas');
+  c.width = sino.cols;
+  c.height = sino.rows;
+  const cx = c.getContext('2d');
+  const id = cx.createImageData(sino.cols, sino.rows);
+  for (let i = 0; i < sino.data.length; i++) {
+    const v = Math.pow(clamp(sino.data[i] / bmax, 0, 1), 0.8);
+    id.data[4 * i] = Math.round(225 * v);
+    id.data[4 * i + 1] = Math.round(232 * v);
+    id.data[4 * i + 2] = Math.round(20 + 235 * v);
+    id.data[4 * i + 3] = 255;
+  }
+  cx.putImageData(id, 0, 0);
+  return c;
+}
+// Flat silhouette for the cross-section inset: shape only, contents stay hidden.
+function buildSilhouette(img) {
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const cx = c.getContext('2d');
+  const id = cx.createImageData(img.width, img.height);
+  for (let i = 0; i < img.data.length; i++) {
+    if (img.data[i] > 0.04) {
+      id.data[4 * i] = 194;
+      id.data[4 * i + 1] = 65;
+      id.data[4 * i + 2] = 12;
+      id.data[4 * i + 3] = 235;
+    }
+  }
+  cx.putImageData(id, 0, 0);
+  return c;
+}
+function placeholderSilhouette() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const cx = c.getContext('2d');
+  cx.fillStyle = 'rgba(194, 65, 12, 0.92)';
+  cx.beginPath();
+  cx.roundRect ? cx.roundRect(7, 14, 50, 40, 5) : cx.rect(7, 14, 50, 40);
+  cx.fill();
+  cx.fillRect(25, 8, 14, 3);
+  cx.fillRect(25, 8, 3, 7);
+  cx.fillRect(36, 8, 3, 7);
+  return c;
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Background, belt and scanner ═════════════════════════════════
+function drawRoom() {
+  let g = ctx.createLinearGradient(0, 0, 0, WALL_BASE);
+  g.addColorStop(0, '#d5dee9');
+  g.addColorStop(1, '#e9eef4');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, WALL_BASE);
+
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.05)';
+  ctx.lineWidth = 1;
+  for (let x = 128; x < W; x += 128) line(x + 0.5, 0, x + 0.5, WALL_BASE - 14);
+
+  ctx.fillStyle = '#b6c1cd';
+  ctx.fillRect(0, WALL_BASE - 14, W, 14);
+
+  g = ctx.createLinearGradient(0, WALL_BASE, 0, H);
+  g.addColorStop(0, '#a9b4c1');
+  g.addColorStop(1, '#cad3dd');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, WALL_BASE, W, H - WALL_BASE);
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.07)';
+  for (const y of [664, 684, 706]) line(0, y, W, y);
+
+  drawSign(40, 430, '1', 'Положите багаж на ленту');
+  drawSign(1050, 430, '2', 'Выдача багажа');
+}
+
+function drawSign(x, y, num, label) {
+  ctx.font = `600 12.5px ${FONT}`;
+  const w = 46 + ctx.measureText(label).width;
+  fillRR(x, y, w, 30, 6, '#1e3a5f');
+  ctx.fillStyle = '#fbbf24';
+  circle(x + 16, y + 15, 9);
+  text(num, x + 16, y + 19.5, { size: 12, weight: 800, color: '#1e3a5f', align: 'center' });
+  text(label, x + 32, y + 20, { size: 12.5, weight: 600, color: '#f1f5f9' });
+}
+
+function drawShadow(x, w) {
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.16)';
+  ctx.beginPath();
+  ctx.ellipse(x, FLOOR + 1, w, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawBelt(offset) {
+  ctx.fillStyle = '#8994a1';
+  for (const x of [300, 470, 960, 1120]) ctx.fillRect(x - 4, 636, 8, FLOOR - 636);
+  for (const x of [300, 470, 960, 1120]) drawShadow(x, 12);
+  fillRR(BELT_X0 - 14, 621, BELT_X1 - BELT_X0 + 28, 17, 6, '#a6b1be');
+
+  fillRR(BELT_X0 - 11, BELT_TOP - 1, BELT_X1 - BELT_X0 + 22, 12, 6, '#2a2f37');
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(BELT_X0 - 4, BELT_TOP, BELT_X1 - BELT_X0 + 8, 10);
+  ctx.clip();
+  ctx.fillStyle = '#4b5563';
+  const step = 26;
+  const shift = ((offset % step) + step) % step;
+  for (let x = BELT_X0 - step + shift; x < BELT_X1 + step; x += step) ctx.fillRect(x, BELT_TOP + 2, 2, 7);
+  ctx.restore();
+
+  for (const x of [BELT_X0, BELT_X1]) {
+    ctx.fillStyle = '#5b6575';
+    circle(x, BELT_TOP + 5, 8);
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1.5;
+    const a = offset / 8;
+    line(x - 6 * Math.cos(a), BELT_TOP + 5 - 6 * Math.sin(a), x + 6 * Math.cos(a), BELT_TOP + 5 + 6 * Math.sin(a));
+  }
+}
+
+function drawBag(hx, hy) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#5b1d0b';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(hx - 7, hy + 13);
+  ctx.lineTo(hx - 7, hy + 3);
+  ctx.quadraticCurveTo(hx - 7, hy, hx - 4, hy);
+  ctx.lineTo(hx + 4, hy);
+  ctx.quadraticCurveTo(hx + 7, hy, hx + 7, hy + 3);
+  ctx.lineTo(hx + 7, hy + 13);
+  ctx.stroke();
+
+  const g = ctx.createLinearGradient(hx - 17, 0, hx + 17, 0);
+  g.addColorStop(0, '#b0380e');
+  g.addColorStop(0.5, '#e05a22');
+  g.addColorStop(1, '#a1330d');
+  fillRR(hx - 17, hy + 12, 34, 64, 7, g);
+  ctx.strokeStyle = 'rgba(80, 24, 8, 0.45)';
+  ctx.lineWidth = 2;
+  for (const dx of [-8, 0, 8]) line(hx + dx, hy + 19, hx + dx, hy + 70);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+  ctx.fillRect(hx - 13, hy + 15, 3, 56);
+
+  ctx.fillStyle = '#1f2937';
+  circle(hx - 10, hy + 79, 4);
+  circle(hx + 10, hy + 79, 4);
+  ctx.restore();
+}
+
+function ringPoint(theta) {
+  return { x: SC.ringX + SC.ringRx * Math.cos(theta), y: SC.ringY - SC.ringRy * Math.sin(theta) };
+}
+
+function drawScannerInterior(t) {
+  const st = stageAt(t);
+  const g = ctx.createLinearGradient(0, SC.winY0, 0, SC.winY1);
+  g.addColorStop(0, '#1b2638');
+  g.addColorStop(1, '#0d1524');
+  ctx.fillStyle = g;
+  ctx.fillRect(SC.winX0, SC.winY0, SC.winX1 - SC.winX0, SC.winY1 - SC.winY0);
+  if (st === 'scan') {
+    const glow = ctx.createRadialGradient(SC.ringX, SC.ringY, 0, SC.ringX, SC.ringY, 90);
+    glow.addColorStop(0, 'rgba(251, 191, 36, 0.20)');
+    glow.addColorStop(1, 'rgba(251, 191, 36, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(SC.winX0, SC.winY0, SC.winX1 - SC.winX0, SC.winY1 - SC.winY0);
+  }
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.25)';
+  ctx.fillRect(SC.winX0, SC.winY0 + 8, SC.winX1 - SC.winX0, 2);
+}
+
+// The ring plane is perpendicular to the belt and seen almost edge-on: the source
+// moves up and down the thin ellipse, and its depth decides whether it is drawn
+// behind or in front of the bag. Front half = right half of the ellipse.
+function drawRing(front, t) {
+  const scanning = stageAt(t) === 'scan';
+  const theta = sourceAngle(t);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = front ? '#94a3b8' : '#475569';
+  ctx.beginPath();
+  if (front) ctx.ellipse(SC.ringX, SC.ringY, SC.ringRx, SC.ringRy, 0, -Math.PI / 2, Math.PI / 2);
+  else ctx.ellipse(SC.ringX, SC.ringY, SC.ringRx, SC.ringRy, 0, Math.PI / 2, 3 * Math.PI / 2);
+  ctx.stroke();
+
+  const detector = theta + Math.PI;
+  if ((Math.cos(detector) >= 0) === front) {
+    ctx.strokeStyle = scanning ? '#0369a1' : '#334155';
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    for (let i = 0; i <= 16; i++) {
+      const p = ringPoint(detector - 0.7 + 1.4 * i / 16);
+      if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  }
+
+  if (front && scanning) {
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.12)';
+    ctx.beginPath();
+    ctx.ellipse(SC.ringX, SC.ringY, SC.ringRx - 3, SC.ringRy - 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const s = ringPoint(theta);
+    ctx.lineWidth = 1.3;
+    for (let i = -2; i <= 2; i++) {
+      const d = ringPoint(detector + 0.32 * i);
+      ctx.strokeStyle = `rgba(251, 191, 36, ${i === 0 ? 0.85 : 0.4})`;
+      line(s.x, s.y, d.x, d.y);
+    }
+  }
+
+  if ((Math.cos(theta) >= 0) === front) {
+    const s = ringPoint(theta);
+    const r = 5 + 1.5 * Math.cos(theta);
+    if (scanning) {
+      const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 18);
+      glow.addColorStop(0, 'rgba(251, 191, 36, 0.7)');
+      glow.addColorStop(1, 'rgba(251, 191, 36, 0)');
+      ctx.fillStyle = glow;
+      circle(s.x, s.y, 18);
+    }
+    ctx.fillStyle = scanning ? '#fbbf24' : '#cbd5e1';
+    circle(s.x, s.y, r);
+  }
+  ctx.restore();
+}
+
+function drawHousing(t) {
+  const st = stageAt(t);
+  ctx.save();
+  ctx.fillStyle = '#c9d3de';
+  ctx.beginPath();
+  ctx.moveTo(SC.x0 + 10, SC.top + 1);
+  ctx.lineTo(SC.x1 - 10, SC.top + 1);
+  ctx.lineTo(SC.x1 - 24, SC.top - 10);
+  ctx.lineTo(SC.x0 + 24, SC.top - 10);
+  ctx.closePath();
+  ctx.fill();
+
+  drawShadow((SC.x0 + SC.x1) / 2, 160);
+  const g = ctx.createLinearGradient(0, SC.top, 0, FLOOR);
+  g.addColorStop(0, '#f8fafc');
+  g.addColorStop(1, '#d6dee8');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  rr(SC.x0, SC.top, SC.x1 - SC.x0, FLOOR - SC.top, 16);
+  rr(SC.winX0, SC.winY0, SC.winX1 - SC.winX0, SC.winY1 - SC.winY0, 14);
+  ctx.fill('evenodd');
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.16)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.fillStyle = '#1d4ed8';
+  ctx.fillRect(SC.x0, SC.winY1 + 20, SC.x1 - SC.x0, 6);
+  ctx.fillStyle = '#9fb0c2';
+  ctx.fillRect(SC.x0 + 8, FLOOR - 14, SC.x1 - SC.x0 - 16, 8);
+
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#334155';
+  ctx.beginPath();
+  rr(SC.winX0, SC.winY0, SC.winX1 - SC.winX0, SC.winY1 - SC.winY0, 14);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(125, 211, 252, 0.07)';
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.09)';
+  ctx.beginPath();
+  ctx.moveTo(SC.winX0 + 20, SC.winY0);
+  ctx.lineTo(SC.winX0 + 52, SC.winY0);
+  ctx.lineTo(SC.winX0 + 8, SC.winY1);
+  ctx.lineTo(SC.winX0 - 24, SC.winY1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  const lampColor = { idle: '#22c55e', incoming: '#38bdf8', scan: '#f59e0b', recon: '#a78bfa', done: '#22c55e' }[st];
+  const blink = st !== 'scan' || Math.floor(t * 3) % 2 === 0;
+  ctx.fillStyle = blink ? lampColor : '#7c5a1c';
+  circle(SC.x0 + 22, SC.top + 15, 5);
+  text('КТ-01', SC.x0 + 34, SC.top + 20, { size: 12, weight: 700, color: '#475569' });
+  text('● ИЗЛУЧЕНИЕ', SC.x1 - 16, SC.top + 20, {
+    size: 11, weight: 700, align: 'right',
+    color: st === 'scan' ? (blink ? '#dc2626' : '#991b1b') : 'rgba(71, 85, 105, 0.45)',
+  });
+  ctx.restore();
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Character ════════════════════════════════════════════════════
+function manX(t) {
+  if (t < TL.walkIn.end) return lerp(MAN_START_X, MAN_PLACE_X, easeOutTrap(prog(TL.walkIn, t)));
+  if (t < TL.walkToExit.start) return MAN_PLACE_X;
+  if (t < TL.walkToExit.end) return lerp(MAN_PLACE_X, MAN_PICK_X, easeTrap(prog(TL.walkToExit, t), 0.15));
+  if (t < TL.walkOff.start) return MAN_PICK_X;
+  return lerp(MAN_PICK_X, MAN_END_X, easeInTrap(prog(TL.walkOff, t)));
+}
+
+function leanAt(t) {
+  const L = 0.2;
+  if (t >= TL.place.start && t < TL.place.end) return L * smoothstep(0.25, 0.9, prog(TL.place, t));
+  if (t >= TL.release.start && t < TL.release.end) return L * (1 - smoothstep(0, 1, prog(TL.release, t)));
+  if (t >= TL.pickup.start && t < TL.pickup.end) {
+    const p = prog(TL.pickup, t);
+    return p < 0.35 ? L * smoothstep(0, 1, p / 0.35) : L * (1 - smoothstep(0.2, 1, (p - 0.35) / 0.65));
+  }
+  return 0;
+}
+
+function armFK(shoulder, beta, flex) {
+  const elbow = { x: shoulder.x + MAN.upper * Math.sin(beta), y: shoulder.y + MAN.upper * Math.cos(beta) };
+  const hand = { x: elbow.x + MAN.fore * Math.sin(beta + flex), y: elbow.y + MAN.fore * Math.cos(beta + flex) };
+  return { elbow, hand };
+}
+
+// Two-bone inverse kinematics; the elbow bends down and back.
+function armIK(shoulder, target) {
+  const l1 = MAN.upper, l2 = MAN.fore;
+  const dx = target.x - shoulder.x, dy = target.y - shoulder.y;
+  const d = clamp(Math.hypot(dx, dy), Math.abs(l1 - l2) + 0.01, l1 + l2 - 0.01);
+  const a = Math.acos(clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1));
+  const angle = Math.atan2(dy, dx) + a;
+  const elbow = { x: shoulder.x + l1 * Math.cos(angle), y: shoulder.y + l1 * Math.sin(angle) };
+  const dir = Math.atan2(target.y - elbow.y, target.x - elbow.x);
+  return { elbow, hand: { x: elbow.x + l2 * Math.cos(dir), y: elbow.y + l2 * Math.sin(dir) } };
+}
+
+function computeMan(t) {
+  const x = manX(t);
+  const speed = (manX(t + 0.04) - manX(t - 0.04)) / 0.08;
+  const amp = clamp(Math.abs(speed) / 100, 0, 1);
+  const phase = (x / STRIDE) * Math.PI * 2;
+  const s = Math.sin(phase), c = Math.cos(phase);
+  const legs = {
+    near: { a: amp * 0.42 * s, k: amp * 0.75 * Math.max(0, c) },
+    far: { a: -amp * 0.42 * s, k: amp * 0.75 * Math.max(0, -c) },
+  };
+  const legHeight = l => MAN.thigh * Math.cos(l.a) + MAN.shin * Math.cos(l.a - l.k);
+  const hip = { x, y: FLOOR - MAN.foot - Math.max(legHeight(legs.near), legHeight(legs.far)) };
+  const lean = leanAt(t);
+  const shoulder = { x: hip.x + MAN.torso * Math.sin(lean), y: hip.y - MAN.torso * Math.cos(lean) };
+  const farShoulder = { x: shoulder.x - 3, y: shoulder.y + 1 };
+  const swing = amp * 0.5 * s;
+  const restNear = armFK(shoulder, 0.08 - swing, 0.22 + 0.25 * amp);
+  const restFar = armFK(farShoulder, 0.08 + swing, 0.22 + 0.25 * amp);
+  const hang = { x: shoulder.x + 5 + 2.5 * amp * s, y: shoulder.y + 57 };
+  const onBelt = bx => ({ x: bx, y: BELT_TOP - BAG_HEIGHT });
+
+  let hand = null;
+  let bag = null;
+  if (t < TL.place.start) {
+    hand = bag = hang;
+  } else if (t < TL.place.end) {
+    const ctrl = { x: MAN_PLACE_X + 20, y: BELT_TOP - BAG_HEIGHT - 38 };
+    hand = bag = quadPoint(hang, ctrl, onBelt(BAG_PLACE_X), easeInOutSine(prog(TL.place, t)));
+  } else if (t < TL.release.end) {
+    hand = lerpPoint(onBelt(BAG_PLACE_X), restNear.hand, easeInOutSine(prog(TL.release, t)));
+  } else if (t >= TL.pickup.start && t < TL.pickup.end) {
+    const p = prog(TL.pickup, t);
+    if (p < 0.35) {
+      hand = lerpPoint(restNear.hand, onBelt(BAG_EXIT_X), easeInOutSine(p / 0.35));
+    } else {
+      const ctrl = { x: MAN_PICK_X + 20, y: BELT_TOP - BAG_HEIGHT - 38 };
+      hand = bag = quadPoint(onBelt(BAG_EXIT_X), ctrl, hang, easeInOutSine((p - 0.35) / 0.65));
+    }
+  } else if (t >= TL.pickup.end) {
+    hand = bag = hang;
+  }
+  const nearArm = hand ? armIK(shoulder, hand) : restNear;
+  return { hip, shoulder, farShoulder, lean, legs, nearArm, farArm: restFar, bag };
+}
+
+function drawLeg(hip, leg, color) {
+  const knee = { x: hip.x + MAN.thigh * Math.sin(leg.a), y: hip.y + MAN.thigh * Math.cos(leg.a) };
+  const foot = { x: knee.x + MAN.shin * Math.sin(leg.a - leg.k), y: knee.y + MAN.shin * Math.cos(leg.a - leg.k) };
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 13;
+  line(hip.x, hip.y, knee.x, knee.y);
+  ctx.lineWidth = 11;
+  line(knee.x, knee.y, foot.x, foot.y);
+  fillRR(foot.x - 7, foot.y - 2, 21, 7, 3.5, '#17181c');
+}
+
+function drawArm(shoulder, arm, sleeve, skin) {
+  ctx.strokeStyle = sleeve;
+  ctx.lineWidth = 10;
+  line(shoulder.x, shoulder.y, arm.elbow.x, arm.elbow.y);
+  ctx.lineWidth = 9;
+  line(arm.elbow.x, arm.elbow.y, arm.hand.x, arm.hand.y);
+  ctx.fillStyle = skin;
+  circle(arm.hand.x, arm.hand.y, 5);
+}
+
+function drawMan(m) {
+  const skin = '#e3b89e';
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  drawShadow(m.hip.x + 4, 26);
+
+  drawLeg(m.hip, m.legs.far, '#1d2638');
+  drawArm(m.farShoulder, m.farArm, '#246556', '#cfa489');
+
+  const n = { x: Math.cos(m.lean), y: Math.sin(m.lean) };
+  ctx.fillStyle = '#2f7d6d';
+  ctx.strokeStyle = '#2f7d6d';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(m.hip.x - 11 * n.x, m.hip.y - 11 * n.y);
+  ctx.lineTo(m.hip.x + 11 * n.x, m.hip.y + 11 * n.y);
+  ctx.lineTo(m.shoulder.x + 12 * n.x, m.shoulder.y + 12 * n.y);
+  ctx.lineTo(m.shoulder.x - 13 * n.x, m.shoulder.y - 13 * n.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = '#1f2937';
+  ctx.lineWidth = 5;
+  line(m.hip.x - 14 * n.x, m.hip.y - 14 * n.y, m.hip.x + 14 * n.x, m.hip.y + 14 * n.y);
+
+  drawLeg(m.hip, m.legs.near, '#27344d');
+
+  const u = { x: Math.sin(m.lean), y: -Math.cos(m.lean) };
+  ctx.strokeStyle = skin;
+  ctx.lineWidth = 8;
+  line(m.shoulder.x, m.shoulder.y, m.shoulder.x + 8 * u.x, m.shoulder.y + 8 * u.y);
+  const head = { x: m.shoulder.x + (MAN.neck + MAN.headR) * u.x + 2, y: m.shoulder.y + (MAN.neck + MAN.headR) * u.y };
+  ctx.fillStyle = skin;
+  circle(head.x, head.y, MAN.headR);
+  ctx.beginPath();
+  ctx.moveTo(head.x + 11, head.y - 2);
+  ctx.lineTo(head.x + 15, head.y + 3);
+  ctx.lineTo(head.x + 10, head.y + 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#3b2a26';
+  ctx.beginPath();
+  ctx.arc(head.x, head.y, MAN.headR + 1, Math.PI * 0.86, Math.PI * 1.92);
+  ctx.quadraticCurveTo(head.x - 1, head.y - 7, head.x - 12, head.y + 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#1f2937';
+  circle(head.x + 6, head.y - 2, 1.4);
+
+  if (m.bag) drawBag(m.bag.x, m.bag.y);
+  drawArm(m.shoulder, m.nearArm, '#2f7d6d', skin);
+  ctx.restore();
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Cross-section inset ══════════════════════════════════════════
+function geometryExtent(g) {
+  const farDetector = Math.sqrt(g.radius ** 2 + g.detectorDistance ** 2
+    - 2 * g.radius * g.detectorDistance * Math.cos(g.halfFan));
+  return Math.max(g.radius, farDetector, Math.hypot(g.imageWidth / 2, g.imageHeight / 2)) * 1.04;
+}
+
+function drawInset(t) {
+  const { x, y, w, h } = INSET;
+  const g = geometry();
+  const scanning = stageAt(t) === 'scan';
+  const theta = sourceAngle(t);
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(15, 23, 42, 0.18)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 6;
+  fillRR(x, y, w, h, 14, 'rgba(255, 255, 255, 0.96)');
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  rr(x, y, w, h, 14);
+  ctx.clip();
+  text('Сечение в плоскости кольца', x + 14, y + 23, { size: 13, weight: 650 });
+  text(`θ = ${fmtDeg(theta)}`, x + w - 14, y + 23, { size: 12, color: '#475569', align: 'right', font: MONO });
+
+  const top = y + 34, bottom = y + h - 30;
+  const cx = x + w / 2, cy = (top + bottom) / 2;
+  const s = Math.min(w / 2 - 12, (bottom - top) / 2) / geometryExtent(g);
+  const X = wx => cx + wx * s;
+  const Y = wy => cy - wy * s;
+
+  const iw = g.imageWidth * s, ih = g.imageHeight * s;
+  ctx.strokeStyle = 'rgba(100, 116, 139, 0.4)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.strokeRect(cx - iw / 2, cy - ih / 2, iw, ih);
+  ctx.beginPath();
+  ctx.arc(cx, cy, g.radius * s, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const presence = bagPresence(t);
+  if (presence > 0) {
+    ctx.globalAlpha = presence;
+    ctx.imageSmoothingEnabled = true;
+    if (!cache.silhouette) cache.silhouette = placeholderSilhouette();
+    ctx.drawImage(cache.silhouette, cx - iw / 2, cy - ih / 2, iw, ih);
+    ctx.globalAlpha = 1;
+  }
+
+  const c = Math.cos(theta), sn = Math.sin(theta);
+  const S = { x: g.radius * c, y: g.radius * sn };
+  const det = gam => ({
+    x: S.x + g.detectorDistance * (-c * Math.cos(gam) - sn * Math.sin(gam)),
+    y: S.y + g.detectorDistance * (-sn * Math.cos(gam) + c * Math.sin(gam)),
+  });
+  const row = scanning ? sinogramRow(currentView(t)) : null;
+  const tMin = state.data ? Math.exp(-state.data.bmax) : 0;
+  const transmission = k => (row ? clamp((Math.exp(-row[k]) - tMin) / (1 - tMin || 1), 0, 1) : 1);
+
+  if (scanning) {
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.11)';
+    ctx.beginPath();
+    ctx.moveTo(X(S.x), Y(S.y));
+    for (let i = 0; i <= 24; i++) {
+      const p = det(-g.halfFan + 2 * g.halfFan * i / 24);
+      ctx.lineTo(X(p.x), Y(p.y));
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 9; i++) {
+      const k = Math.min(g.detectors - 1, Math.floor((i + 0.5) / 9 * g.detectors));
+      const p = det((2 * (k + 0.5) / g.detectors - 1) * g.halfFan);
+      ctx.strokeStyle = `rgba(217, 119, 6, ${0.15 + 0.6 * transmission(k)})`;
+      line(X(S.x), Y(S.y), X(p.x), Y(p.y));
+    }
+  }
+
+  const segments = Math.min(g.detectors, 160);
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'butt';
+  for (let i = 0; i < segments; i++) {
+    const a = det((-1 + 2 * i / segments) * g.halfFan);
+    const b = det((-1 + 2 * (i + 1) / segments) * g.halfFan);
+    const k = Math.min(g.detectors - 1, Math.floor((i + 0.5) / segments * g.detectors));
+    ctx.strokeStyle = scanning ? mixColor([12, 74, 110], [125, 211, 252], transmission(k)) : '#64748b';
+    line(X(a.x), Y(a.y), X(b.x), Y(b.y));
+  }
+
+  const sx = X(S.x), sy = Y(S.y);
+  if (scanning) {
+    const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 16);
+    glow.addColorStop(0, 'rgba(251, 191, 36, 0.6)');
+    glow.addColorStop(1, 'rgba(251, 191, 36, 0)');
+    ctx.fillStyle = glow;
+    circle(sx, sy, 16);
+  }
+  ctx.fillStyle = scanning ? '#f59e0b' : '#94a3b8';
+  circle(sx, sy, 5.5);
+
+  const ly = y + h - 11;
+  ctx.fillStyle = '#f59e0b';
+  circle(x + 19, ly - 4, 4);
+  text('источник', x + 28, ly, { size: 11.5, color: '#475569' });
+  ctx.fillStyle = '#0369a1';
+  ctx.fillRect(x + 96, ly - 7, 14, 5);
+  text('детекторы', x + 115, ly, { size: 11.5, color: '#475569' });
+  ctx.fillStyle = BAG_COLOR;
+  ctx.fillRect(x + 194, ly - 9, 9, 9);
+  text('объект', x + 208, ly, { size: 11.5, color: '#475569' });
+  ctx.restore();
+}
+
+// Dashed connector from the inset to the window; drawn before the character.
+function drawLeader() {
+  const from = { x: INSET.x + INSET.w / 2, y: INSET.y + INSET.h };
+  const to = { x: SC.winX0 + 3, y: SC.ringY };
+  ctx.save();
+  ctx.strokeStyle = 'rgba(71, 85, 105, 0.55)';
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([5, 4]);
+  line(from.x, from.y, to.x, to.y);
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(71, 85, 105, 0.7)';
+  circle(to.x, to.y, 3);
+  ctx.restore();
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Operator monitor ═════════════════════════════════════════════
+function columns(body) {
+  const gap = 12;
+  const a = 262, b = 300;
+  return [
+    { x: body.x, w: a },
+    { x: body.x + a + gap, w: b },
+    { x: body.x + a + b + 2 * gap, w: body.w - a - b - 2 * gap },
+  ];
+}
+
+function panel(col, body, title) {
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.06)';
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  rr(col.x, body.y, col.w, body.h, 8);
+  ctx.fill();
+  ctx.stroke();
+  if (title) text(title, col.x + 12, body.y + 19, { size: 12, weight: 600, color: '#cbd5e1' });
+}
+
+function statRows(col, y0, rows) {
+  rows.forEach(([label, value, color], i) => {
+    const y = y0 + i * 25;
+    text(label, col.x + 12, y, { size: 12, color: '#8b9ab0' });
+    text(value, col.x + col.w - 12, y, { size: 12.5, weight: 600, color: color || '#e2e8f0', align: 'right', font: MONO });
+  });
+}
+
+function colorbar(col, body) {
+  const x = col.x + 12, w = col.w - 24, y = body.y + body.h - 30;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(colorbarCanvas(), x, y, w, 8);
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, 8);
+  text('0', x, y + 22, { size: 11, color: '#8b9ab0' });
+  text('μ / μmax', x + w / 2, y + 22, { size: 11, color: '#8b9ab0', align: 'center' });
+  text('1', x + w, y + 22, { size: 11, color: '#8b9ab0', align: 'right' });
+}
+
+function imageBox(col, body) {
+  const size = Math.min(col.w - 24, body.h - 44);
+  return { x: col.x + (col.w - size) / 2, y: body.y + 30, w: size, h: size };
+}
+
+function drawImagePanel(col, body, title, canvas, highlight = 0) {
+  panel(col, body, title);
+  const box = imageBox(col, body);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(box.x, box.y, box.w, box.h);
+  if (canvas) drawFit(canvas, box.x, box.y, box.w, box.h);
+  ctx.strokeStyle = highlight > 0 ? `rgba(74, 222, 128, ${highlight})` : 'rgba(148, 163, 184, 0.25)';
+  ctx.lineWidth = highlight > 0 ? 3 : 1;
+  ctx.strokeRect(box.x, box.y, box.w, box.h);
+  return box;
+}
+
+function monitorHeader(t, st) {
+  const y = SCREEN.y;
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.08)';
+  ctx.fillRect(SCREEN.x, y, SCREEN.w, 30);
+  text('КТ-01 · станция оператора', SCREEN.x + 16, y + 20, { size: 12, weight: 600, color: '#cbd5e1' });
+  const d = state.data;
+  if (d) {
+    text(`срез ${d.final.width}×${d.final.height} · ${fmtInt(d.geometry.views)}×${fmtInt(d.geometry.detectors)} лучей`,
+         SCREEN.x + SCREEN.w / 2, y + 20, { size: 12, color: '#7b8aa0', align: 'center' });
+  }
+  const now = new Date();
+  const clock = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  text(clock, SCREEN.x + SCREEN.w - 16, y + 20, { size: 12, color: '#7b8aa0', align: 'right', font: MONO });
+
+  const info = STAGES[st];
+  ctx.font = `700 11px ${FONT}`;
+  const tw = ctx.measureText(info.label).width;
+  const pw = tw + 30, px = SCREEN.x + SCREEN.w - 16 - 52 - pw;
+  ctx.globalAlpha = 0.16;
+  fillRR(px, y + 6, pw, 18, 9, info.color);
+  ctx.globalAlpha = st === 'scan' && Math.floor(t * 3) % 2 ? 0.35 : 1;
+  ctx.fillStyle = info.color;
+  circle(px + 11, y + 15, 3.5);
+  ctx.globalAlpha = 1;
+  text(info.label, px + 20, y + 19, { size: 11, weight: 700, color: info.color });
+}
+
+function monitorMessage(body, title, subtitle, t) {
+  const cx = body.x + body.w / 2, cy = body.y + body.h / 2;
+  text(title, cx, cy - 4, { size: 24, weight: 650, color: '#e2e8f0', align: 'center' });
+  text(subtitle, cx, cy + 22, { size: 13, color: '#8b9ab0', align: 'center' });
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = `rgba(56, 189, 248, ${0.25 + 0.75 * Math.max(0, Math.sin(t * 4 - i * 0.7))})`;
+    circle(cx - 14 + 14 * i, cy + 48, 3.5);
+  }
+}
+
+function monitorScan(body, t) {
+  const d = state.data, g = d.geometry;
+  const [A, B, C] = columns(body);
+  const p = prog(TL.scan, t);
+  const v = currentView(t);
+  const theta = sourceAngle(t);
+
+  panel(A, body, 'Синограмма b(θ, γ)');
+  const ix = A.x + 26, iy = body.y + 30, iw = A.w - 38, ih = body.h - 58;
+  ctx.fillStyle = '#04080f';
+  ctx.fillRect(ix, iy, iw, ih);
+  const rows = Math.min(g.views, Math.round(p * g.views));
+  if (rows > 0) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(cache.sinogram, 0, 0, g.detectors, rows, ix, iy, iw, ih * rows / g.views);
+  }
+  ctx.strokeStyle = '#f59e0b';
+  ctx.lineWidth = 1.5;
+  line(ix, iy + ih * rows / g.views, ix + iw, iy + ih * rows / g.views);
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(ix, iy, iw, ih);
+  text('детекторы →', ix + iw, iy + ih + 16, { size: 11, color: '#8b9ab0', align: 'right' });
+  text('θ', A.x + 12, iy + 12, { size: 12, color: '#8b9ab0' });
+  text('↓', A.x + 12, iy + 28, { size: 12, color: '#8b9ab0' });
+
+  panel(B, body, `Проекция при θ = ${fmtDeg(theta)}`);
+  const row = sinogramRow(v);
+  const px = B.x + 14, py = body.y + 36, pw = B.w - 28, ph = body.h - 100;
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.18)';
+  line(px, py + ph, px + pw, py + ph);
+  if (row) {
+    const n = row.length;
+    const X = k => px + pw * (n > 1 ? k / (n - 1) : 0.5);
+    const Y = val => py + ph * (1 - clamp(val / d.bmax, 0, 1));
+    ctx.beginPath();
+    ctx.moveTo(X(0), py + ph);
+    for (let k = 0; k < n; k++) ctx.lineTo(X(k), Y(row[k]));
+    ctx.lineTo(X(n - 1), py + ph);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.16)';
+    ctx.fill();
+    ctx.beginPath();
+    for (let k = 0; k < n; k++) (k ? ctx.lineTo : ctx.moveTo).call(ctx, X(k), Y(row[k]));
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    const sy = py + ph + 14;
+    const tMin = Math.exp(-d.bmax);
+    for (let k = 0; k < n; k++) {
+      const tr = clamp((Math.exp(-row[k]) - tMin) / (1 - tMin || 1), 0, 1);
+      ctx.fillStyle = mixColor([12, 74, 110], [125, 211, 252], tr);
+      ctx.fillRect(px + pw * k / n, sy, pw / n + 0.6, 12);
+    }
+    text('пропускание e^(−b) на детекторах', px, sy + 30, { size: 11, color: '#8b9ab0' });
+  }
+  text('b', px - 2, py - 6, { size: 11, color: '#8b9ab0' });
+
+  panel(C, body, 'Сбор данных');
+  statRows(C, body.y + 46, [
+    ['Ракурс', `${v + 1} / ${fmtInt(g.views)}`],
+    ['Угол θ', fmtDeg(theta)],
+    ['Детекторов', fmtInt(g.detectors)],
+    ['Измерений', fmtInt(g.views * g.detectors)],
+    ['Ненулей в A', fmtInt(d.meta.nnz)],
+    ['Веер', `±${fmtFixed(g.halfFan * 180 / Math.PI, 1)}°`],
+    ['R / L', `${fmtNumber(g.radius)} / ${fmtNumber(g.detectorDistance)} м`],
+  ]);
+}
+
+function convergencePlot(col, body, history, current) {
+  const px = col.x + 44, py = body.y + 40, pw = col.w - 58, ph = body.h - 84;
+  if (!history.length) {
+    text('нет iterations/history.csv', col.x + col.w / 2, body.y + body.h / 2, { size: 12, color: '#8b9ab0', align: 'center' });
+    return;
+  }
+  const first = history[0].iteration, last = history[history.length - 1].iteration;
+  const logs = history.map(h => Math.log10(Math.max(h.residual, 1e-300)));
+  let lo = Math.floor(Math.min(...logs));
+  const hi = Math.max(0, Math.ceil(Math.max(...logs)));
+  if (lo >= hi) lo = hi - 1;
+  const rmseValues = history.map(h => h.rmse).filter(Number.isFinite);
+  const rmseMax = rmseValues.length ? Math.max(...rmseValues) : 1;
+  const X = it => px + pw * (last > first ? (it - first) / (last - first) : 0.5);
+  const Yr = lg => py + ph * (hi - lg) / (hi - lo);
+  const Ye = e => py + ph * (1 - e / (rmseMax || 1));
+
+  const step = Math.max(1, Math.ceil((hi - lo) / 5));
+  ctx.lineWidth = 1;
+  for (let e = hi; e >= lo; e -= step) {
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
+    line(px, Yr(e), px + pw, Yr(e));
+    text(`10${sup(e)}`, px - 6, Yr(e) + 4, { size: 10.5, color: '#8b9ab0', align: 'right' });
+  }
+  text(String(first), px, py + ph + 16, { size: 10.5, color: '#8b9ab0' });
+  text(String(last), px + pw, py + ph + 16, { size: 10.5, color: '#8b9ab0', align: 'right' });
+  text('итерация', px + pw / 2, py + ph + 16, { size: 10.5, color: '#8b9ab0', align: 'center' });
+
+  const series = (pick, color, width, upto) => {
+    ctx.beginPath();
+    let started = false;
+    for (const h of history) {
+      if (upto != null && h.iteration > upto) break;
+      const yv = pick(h);
+      if (!Number.isFinite(yv)) continue;
+      if (started) ctx.lineTo(X(h.iteration), yv); else { ctx.moveTo(X(h.iteration), yv); started = true; }
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  };
+  const residualY = h => Yr(Math.log10(Math.max(h.residual, 1e-300)));
+  const rmseY = h => (Number.isFinite(h.rmse) ? Ye(h.rmse) : NaN);
+  series(residualY, 'rgba(56, 189, 248, 0.2)', 1.5, null);
+  series(rmseY, 'rgba(74, 222, 128, 0.2)', 1.5, null);
+  series(residualY, '#38bdf8', 2, current);
+  series(rmseY, '#4ade80', 2, current);
+
+  const cur = history.find(h => h.iteration === current);
+  if (cur) {
+    ctx.strokeStyle = 'rgba(226, 232, 240, 0.35)';
+    ctx.setLineDash([3, 3]);
+    line(X(current), py, X(current), py + ph);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#38bdf8';
+    circle(X(current), residualY(cur), 3.5);
+    if (Number.isFinite(cur.rmse)) {
+      ctx.fillStyle = '#4ade80';
+      circle(X(current), rmseY(cur), 3.5);
+    }
+  }
+  fillRR(px + pw - 158, py - 4, 156, 36, 6, 'rgba(10, 18, 31, 0.85)');
+  ctx.fillStyle = '#38bdf8';
+  ctx.fillRect(px + pw - 150, py + 4, 12, 3);
+  text('невязка (лог.)', px + pw - 134, py + 9, { size: 10.5, color: '#cbd5e1' });
+  ctx.fillStyle = '#4ade80';
+  ctx.fillRect(px + pw - 150, py + 19, 12, 3);
+  text('RMSE (лин.)', px + pw - 134, py + 24, { size: 10.5, color: '#cbd5e1' });
+}
+
+function regularizationName(meta) {
+  if (/zero/i.test(meta.regularization)) return 'L = E';
+  if (/first/i.test(meta.regularization)) return 'соседние разности';
+  return meta.regularization || '—';
+}
+
+function monitorRecon(body, t) {
+  const d = state.data;
+  const [A, B, C] = columns(body);
+  const idx = currentFrameIndex(t);
+  const frame = idx >= 0 ? d.frames[idx] : null;
+  const iteration = frame ? frame.iteration : 0;
+  const hist = d.historyByIteration.get(iteration);
+  const total = d.meta.iterations || (d.history.length ? d.history[d.history.length - 1].iteration : 0);
+
+  if (frame) {
+    drawImagePanel(A, body, `Итерация ${iteration}`, imageCanvas(`frame:${idx}`, frame.image));
+  } else {
+    const box = drawImagePanel(A, body, 'Решение', null);
+    ctx.globalAlpha = prog(TL.recon, t);
+    drawFit(imageCanvas('final', d.final), box.x, box.y, box.w, box.h);
+    ctx.globalAlpha = 1;
+    text('кадры итераций не сохранены', A.x + A.w / 2, body.y + body.h - 6, { size: 10.5, color: '#8b9ab0', align: 'center' });
+  }
+
+  panel(B, body, 'Сходимость CG');
+  convergencePlot(B, body, d.history, iteration);
+
+  panel(C, body, 'Метод Тихонова');
+  statRows(C, body.y + 46, [
+    ['Итерация', `${iteration} / ${total || '—'}`],
+    ['‖r‖ / ‖Aᵀb‖', hist ? fmtSci(hist.residual) : '—'],
+    ['RMSE', hist ? fmtFixed(hist.rmse, 4) : '—'],
+    ['λ', fmtNumber(d.meta.lambda)],
+    ['Матрица L', regularizationName(d.meta)],
+    ['Метод', 'CG + Якоби'],
+  ]);
+  colorbar(C, body);
+}
+
+function monitorDone(body, t) {
+  const d = state.data;
+  const [A, B, C] = columns(body);
+  const glow = 1 - prog(TL.reveal, t);
+  drawImagePanel(A, body, 'Реконструкция', imageCanvas('final', d.final), glow > 0.02 ? 0.25 + 0.75 * glow : 0);
+  if (d.original) {
+    drawImagePanel(B, body, 'Оригинал (фантом)', imageCanvas('original', d.original));
+  } else {
+    panel(B, body, 'Оригинал (фантом)');
+    text('нет original.pgm', B.x + B.w / 2, body.y + body.h / 2, { size: 12, color: '#8b9ab0', align: 'center' });
+  }
+
+  panel(C, body, 'Результат');
+  const m = d.meta;
+  statRows(C, body.y + 46, [
+    ['Статус', m.converged ? 'сошёлся' : (m.status ? 'лимит итераций' : '—'), m.converged ? '#4ade80' : '#fbbf24'],
+    ['Итераций', fmtInt(m.iterations)],
+    ['RMSE', fmtFixed(m.rmse, 4)],
+    ['λ', fmtNumber(m.lambda)],
+    ['Шум', m.noise ? `Пуассон, I₀ = ${fmtSci(m.photons)}` : 'нет'],
+    ['Решатель', Number.isFinite(m.solverTime) ? `${fmtNumber(m.solverTime)} с` : '—'],
+  ]);
+  colorbar(C, body);
+}
+
+function monitorFooter(t, st) {
+  const x = SCREEN.x + 16, w = SCREEN.w - 32, y = SCREEN.y + SCREEN.h - 22;
+  const d = state.data;
+  const g = geometry();
+  let label = '', p = 0;
+  if (st === 'idle') {
+    label = 'Система готова';
+  } else if (st === 'incoming') {
+    label = 'Подача багажа в туннель';
+    p = prog(TL.convey, t);
+  } else if (st === 'scan') {
+    p = prog(TL.scan, t);
+    label = `Сбор проекций · ракурс ${currentView(t) + 1} из ${fmtInt(g.views)}`;
+  } else if (st === 'recon') {
+    p = prog(TL.recon, t);
+    const idx = currentFrameIndex(t);
+    const total = d && d.meta.iterations;
+    label = idx >= 0 ? `Реконструкция · итерация ${d.frames[idx].iteration} из ${total || '—'}` : 'Реконструкция';
+  } else {
+    p = 1;
+    label = !d ? 'Готово' : d.meta.converged ? `Готово · сошёлся за ${fmtInt(d.meta.iterations)} итераций` : 'Готово · достигнут лимит итераций';
+  }
+  text(label, x, y - 8, { size: 12, color: '#cbd5e1' });
+  text(`${Math.round(p * 100)}%`, x + w, y - 8, { size: 12, color: '#8b9ab0', align: 'right', font: MONO });
+  fillRR(x, y, w, 6, 3, 'rgba(148, 163, 184, 0.16)');
+  if (p > 0) fillRR(x, y, Math.max(6, w * p), 6, 3, STAGES[st].color);
+}
+
+function drawMonitor(t) {
+  const st = stageAt(t);
+  ctx.save();
+  ctx.shadowColor = 'rgba(15, 23, 42, 0.35)';
+  ctx.shadowBlur = 26;
+  ctx.shadowOffsetY = 10;
+  fillRR(MON.x, MON.y, MON.w, MON.h, 16, '#0b0f17');
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  rr(SCREEN.x, SCREEN.y, SCREEN.w, SCREEN.h, 8);
+  ctx.clip();
+  const bg = ctx.createLinearGradient(0, SCREEN.y, 0, SCREEN.y + SCREEN.h);
+  bg.addColorStop(0, '#0e1a2c');
+  bg.addColorStop(1, '#08111d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(SCREEN.x, SCREEN.y, SCREEN.w, SCREEN.h);
+
+  monitorHeader(t, st);
+  const body = { x: SCREEN.x + 16, y: SCREEN.y + 40, w: SCREEN.w - 32, h: SCREEN.h - 40 - 46 };
+  if (!state.data && (st === 'scan' || st === 'recon' || st === 'done')) {
+    monitorMessage(body, 'Нет данных расчёта', 'Откройте папку output кнопкой «Открыть папку…» под сценой', t);
+  } else if (st === 'idle') {
+    monitorMessage(body, 'Ожидание багажа', 'Положите предмет на ленту: сканирование начнётся автоматически', t);
+  } else if (st === 'incoming') {
+    monitorMessage(body, 'Багаж принят', 'Подача в туннель сканера', t);
+  } else if (st === 'scan') {
+    monitorScan(body, t);
+  } else if (st === 'recon') {
+    monitorRecon(body, t);
+  } else {
+    monitorDone(body, t);
+  }
+  monitorFooter(t, st);
+
+  const glare = ctx.createLinearGradient(SCREEN.x, SCREEN.y, SCREEN.x + SCREEN.w * 0.6, SCREEN.y + SCREEN.h);
+  glare.addColorStop(0, 'rgba(255, 255, 255, 0.05)');
+  glare.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = glare;
+  ctx.fillRect(SCREEN.x, SCREEN.y, SCREEN.w, SCREEN.h);
+  ctx.restore();
+
+  ctx.fillStyle = st === 'idle' ? '#64748b' : '#22c55e';
+  circle(MON.x + MON.w / 2, MON.y + MON.h - 7, 2.5);
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Frame ════════════════════════════════════════════════════════
+function render() {
+  const t = state.t;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, els.canvas.width, els.canvas.height);
+  ctx.setTransform(view.k, 0, 0, view.k, view.ox, view.oy);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.clip();
+
+  drawRoom();
+  drawScannerInterior(t);
+  drawRing(false, t);
+  drawBelt(beltOffset(t));
+  if (bagOnBelt(t)) {
+    const bx = bagBeltX(t);
+    if (bx < SC.x0 || bx > SC.x1) drawShadow(bx, 18);
+    drawBag(bx, BELT_TOP - BAG_HEIGHT);
+  }
+  drawRing(true, t);
+  drawHousing(t);
+  drawLeader();
+  drawMan(computeMan(t));
+  drawInset(t);
+  drawMonitor(t);
+  text('КТ-досмотр багажа', 28, 46, { size: 22, weight: 750 });
+  text('веерный пучок · Сиддон · Тихонов + CG', 28, 68, { size: 12.5, color: '#475569' });
+  ctx.restore();
+
+  if (!state.scrubbing) els.timeline.value = String(Math.round(1000 * t / TL.total));
+  els.clock.textContent = `${fmtClock(t)} / ${fmtClock(TL.total)}`;
+}
+
+function tick(now) {
+  if (state.playing) {
+    if (state.last != null) state.t = Math.min(TL.total, state.t + (now - state.last) / 1000 * state.speed);
+    state.last = now;
+    if (state.t >= TL.total) setPlaying(false);
+    state.dirty = true;
+  }
+  if (state.dirty) {
+    state.dirty = false;
+    render();
+  }
+  requestAnimationFrame(tick);
+}
+
+function resize() {
+  const rect = els.stage.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cw = Math.max(1, Math.round(rect.width * dpr));
+  const ch = Math.max(1, Math.round(rect.height * dpr));
+  if (els.canvas.width !== cw || els.canvas.height !== ch) {
+    els.canvas.width = cw;
+    els.canvas.height = ch;
+  }
+  const k = Math.min(cw / W, ch / H);
+  view = { k, ox: (cw - W * k) / 2, oy: (ch - H * k) / 2 };
+  // Resizing clears the canvas, so redraw at once instead of waiting for the next frame.
+  render();
+  state.dirty = false;
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Data loading ═════════════════════════════════════════════════
+function parsePGM(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let pos = 0;
+  const isSpace = c => c === 32 || (c >= 9 && c <= 13);
+  const skip = () => {
+    while (pos < bytes.length) {
+      if (isSpace(bytes[pos])) pos++;
+      else if (bytes[pos] === 35) while (pos < bytes.length && bytes[pos] !== 10 && bytes[pos] !== 13) pos++;
+      else break;
+    }
+  };
+  const token = () => {
+    skip();
+    const start = pos;
+    while (pos < bytes.length && !isSpace(bytes[pos]) && bytes[pos] !== 35) pos++;
+    if (start === pos) throw new Error('PGM: неожиданный конец заголовка');
+    return String.fromCharCode(...bytes.subarray(start, pos));
+  };
+  const magic = token();
+  if (magic !== 'P5' && magic !== 'P2') throw new Error('ожидался PGM (P5 или P2)');
+  const width = parseInt(token(), 10);
+  const height = parseInt(token(), 10);
+  const maxval = parseInt(token(), 10);
+  if (!(width > 0 && height > 0 && maxval > 0 && maxval < 65536)) throw new Error('PGM: некорректный заголовок');
+  const n = width * height;
+  const data = new Float32Array(n);
+  if (magic === 'P5') {
+    pos += 1;
+    const bpp = maxval < 256 ? 1 : 2;
+    if (bytes.length - pos < n * bpp) throw new Error('PGM: файл обрезан');
+    for (let i = 0; i < n; i++) {
+      const v = bpp === 1 ? bytes[pos + i] : (bytes[pos + 2 * i] << 8) | bytes[pos + 2 * i + 1];
+      data[i] = v / maxval;
+    }
+  } else {
+    for (let i = 0; i < n; i++) data[i] = parseInt(token(), 10) / maxval;
+  }
+  return { width, height, data };
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+  if (!lines.length) throw new Error('пустой CSV');
+  const cols = lines[0].split(',').length;
+  const data = new Float32Array(lines.length * cols);
+  lines.forEach((l, r) => {
+    const parts = l.split(',');
+    if (parts.length !== cols) throw new Error(`строка ${r + 1}: ожидалось ${cols} значений`);
+    for (let c = 0; c < cols; c++) data[r * cols + c] = Number(parts[c]);
+  });
+  return { rows: lines.length, cols, data };
+}
+
+function parseHistory(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+  const header = (lines.shift() || '').split(',').map(s => s.trim());
+  const col = name => header.indexOf(name);
+  const [iI, iR, iE, iF] = ['iteration', 'relative_residual', 'rmse', 'frame'].map(col);
+  if (iI < 0) throw new Error('history.csv: нет столбца iteration');
+  return lines.map(l => {
+    const p = l.split(',');
+    return {
+      iteration: Number(p[iI]),
+      residual: iR >= 0 ? Number(p[iR]) : NaN,
+      rmse: iE >= 0 ? Number(p[iE]) : NaN,
+      frame: iF >= 0 ? (p[iF] || '').trim() : '',
+    };
+  }).filter(h => Number.isFinite(h.iteration));
+}
+
+function parseReport(text) {
+  const map = {};
+  for (const l of text.split(/\r?\n/)) {
+    const i = l.indexOf(':');
+    if (i > 0) {
+      const key = l.slice(0, i).trim();
+      if (!(key in map)) map[key] = l.slice(i + 1).trim();
+    }
+  }
+  return map;
+}
+
+// Provider over HTTP(S); fails on file:// pages, where the folder picker is used instead.
+// Network errors are retried: simple local servers (python3 -m http.server) have a short
+// connection backlog and may reset some of the parallel requests.
+function fetchProvider(base) {
+  const root = new URL(base.endsWith('/') ? base : `${base}/`, location.href);
+  const attempts = location.protocol === 'file:' ? 1 : 4;
+  const get = async (name, kind) => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const response = await fetch(new URL(name, root));
+        if (!response.ok) return null;
+        return await (kind === 'text' ? response.text() : response.arrayBuffer());
+      } catch (err) {
+        if (attempt >= attempts) throw err;
+        await new Promise(resolve => setTimeout(resolve, 150 * attempt));
+      }
+    }
+  };
+  return { text: name => get(name, 'text'), bytes: name => get(name, 'bytes'), list: null };
+}
+
+// Provider over picked or dropped files; the root is the folder that holds sinogram.csv.
+function fileProvider(files) {
+  const candidates = files.filter(f => /(^|\/)sinogram\.csv$/.test(f.path)).sort((a, b) => a.path.length - b.path.length);
+  if (!candidates.length) throw new Error('в выбранной папке нет sinogram.csv');
+  const root = candidates[0].path.slice(0, -'sinogram.csv'.length);
+  const map = new Map();
+  for (const f of files) if (f.path.startsWith(root)) map.set(f.path.slice(root.length), f.file);
+  return {
+    text: async name => (map.has(name) ? map.get(name).text() : null),
+    bytes: async name => (map.has(name) ? map.get(name).arrayBuffer() : null),
+    list: [...map.keys()],
+  };
+}
+
+async function loadDataset(provider, label) {
+  const sinoText = await provider.text('sinogram.csv');
+  if (sinoText == null) throw new Error('нет файла sinogram.csv');
+  const finalBytes = await provider.bytes('reconstructed.pgm');
+  if (!finalBytes) throw new Error('нет файла reconstructed.pgm');
+  const [originalBytes, reportText, historyText] = await Promise.all([
+    provider.bytes('original.pgm'), provider.text('report.txt'), provider.text('iterations/history.csv'),
+  ]);
+
+  const sino = parseCSV(sinoText);
+  const final = parsePGM(finalBytes);
+  const original = originalBytes ? parsePGM(originalBytes) : null;
+  const report = reportText ? parseReport(reportText) : {};
+  const history = historyText ? parseHistory(historyText) : [];
+
+  let names = history.filter(h => h.frame).map(h => ({ iteration: h.iteration, name: h.frame }));
+  if (!names.length && provider.list) {
+    names = provider.list
+      .map(p => /^iterations\/(iter_(\d+)\.pgm)$/.exec(p))
+      .filter(Boolean)
+      .map(m => ({ iteration: Number(m[2]), name: m[1] }))
+      .sort((a, b) => a.iteration - b.iteration);
+  }
+  // Cap the decoded frames at about 25 million pixels; keep the first and the last.
+  const cap = Math.max(2, Math.floor(2.5e7 / (final.width * final.height)));
+  if (names.length > cap) {
+    names = Array.from({ length: cap }, (_, i) => names[Math.round(i * (names.length - 1) / (cap - 1))]);
+  }
+  const frames = [];
+  for (let i = 0; i < names.length; i += 4) {
+    const chunk = names.slice(i, i + 4);
+    const buffers = await Promise.all(chunk.map(f => provider.bytes(`iterations/${f.name}`)));
+    chunk.forEach((f, j) => {
+      if (!buffers[j]) return;
+      const image = parsePGM(buffers[j]);
+      if (image.width === final.width && image.height === final.height) frames.push({ iteration: f.iteration, image });
+    });
+  }
+
+  const num = (key, fallback) => {
+    const v = parseFloat(report[key]);
+    return Number.isFinite(v) ? v : fallback;
+  };
+  const size = (report['Image size'] || '').split('x').map(parseFloat);
+  const geometryData = {
+    radius: num('Radius', DEFAULT_GEOMETRY.radius),
+    detectorDistance: num('Detector distance', DEFAULT_GEOMETRY.detectorDistance),
+    halfFan: num('Half fan angle', DEFAULT_GEOMETRY.halfFan),
+    startAngle: num('Start angle', DEFAULT_GEOMETRY.startAngle),
+    scanAngle: num('Scan angle', DEFAULT_GEOMETRY.scanAngle),
+    imageWidth: Number.isFinite(size[0]) ? size[0] : DEFAULT_GEOMETRY.imageWidth,
+    imageHeight: Number.isFinite(size[1]) ? size[1] : DEFAULT_GEOMETRY.imageHeight,
+    views: sino.rows,
+    detectors: sino.cols,
+  };
+  const lastIteration = history.length ? history[history.length - 1].iteration : (frames.length ? frames[frames.length - 1].iteration : NaN);
+  const meta = {
+    lambda: num('Lambda', NaN),
+    regularization: report.Regularization || '',
+    status: report.Status || '',
+    converged: /converged/i.test(report.Status || ''),
+    iterations: num('Iterations', lastIteration),
+    rmse: num('RMSE against original', NaN),
+    solverTime: num('Solver time (s)', NaN),
+    nnz: num('Nonzero elements', NaN),
+    noise: report['Poisson noise enabled'] === 'true',
+    photons: num('Incident photon count', NaN),
+  };
+
+  let bmax = 0;
+  for (const v of sino.data) if (Number.isFinite(v) && v > bmax) bmax = v;
+  return {
+    label, sino, final, original, history, frames, geometry: geometryData, meta,
+    bmax: bmax || 1,
+    historyByIteration: new Map(history.map(h => [h.iteration, h])),
+  };
+}
+
+function describe(d) {
+  const parts = [
+    `Данные: ${d.label}`,
+    `срез ${d.final.width}×${d.final.height}`,
+    `${fmtInt(d.geometry.views)}×${fmtInt(d.geometry.detectors)} лучей`,
+    d.frames.length ? `${d.frames.length} кадров итераций`
+      : 'кадров итераций нет: запустите программу с --save-iterations 1',
+  ];
+  return parts.join(' · ');
+}
+
+function applyDataset(d) {
+  state.data = d;
+  cache.images.clear();
+  cache.sinogram = buildSinogramCanvas(d.sino, d.bmax);
+  cache.silhouette = buildSilhouette(d.original || d.final);
+  TL = buildTimeline(d);
+  els.startCard.hidden = true;
+  setStatus(describe(d));
+  if (initialTime != null) {
+    state.t = clamp(initialTime, 0, TL.total);
+    setPlaying(false);
+  } else {
+    state.t = 0;
+    setPlaying(true);
+  }
+  render();
+}
+
+async function loadFiles(files, label) {
+  setStatus('Загрузка…');
+  try {
+    applyDataset(await loadDataset(fileProvider(files), label));
+  } catch (err) {
+    setStatus(`Не удалось загрузить данные: ${err.message}`, true);
+  }
+}
+
+// Collects files from a drop, walking dropped folders recursively.
+async function filesFromDrop(dataTransfer) {
+  const entries = [...dataTransfer.items]
+    .filter(item => item.kind === 'file')
+    .map(item => (item.webkitGetAsEntry ? item.webkitGetAsEntry() : null))
+    .filter(Boolean);
+  if (!entries.length) return [...dataTransfer.files].map(file => ({ path: file.name, file }));
+  const out = [];
+  const walk = async (entry, prefix) => {
+    if (entry.isFile) {
+      out.push({ path: prefix + entry.name, file: await new Promise((res, rej) => entry.file(res, rej)) });
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      for (;;) {
+        const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+        if (!batch.length) break;
+        for (const child of batch) await walk(child, `${prefix}${entry.name}/`);
+      }
+    }
+  };
+  for (const entry of entries) await walk(entry, '');
+  return out;
+}
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Controls ═════════════════════════════════════════════════════
+function setStatus(message, isError = false) {
+  els.status.textContent = message;
+  els.status.classList.toggle('error', isError);
+}
+
+function setPlaying(on) {
+  if (on && state.t >= TL.total) state.t = 0;
+  state.playing = on;
+  state.last = null;
+  els.play.textContent = on ? '❚❚' : '▶';
+  els.play.setAttribute('aria-label', on ? 'Пауза' : 'Пуск');
+  state.dirty = true;
+}
+
+function seek(t) {
+  state.t = clamp(t, 0, TL.total);
+  state.last = null;
+  state.dirty = true;
+}
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (els.stage.requestFullscreen) els.stage.requestFullscreen().catch(() => {});
+  else if (els.stage.webkitRequestFullscreen) els.stage.webkitRequestFullscreen();
+}
+
+function setPalette(pseudo) {
+  state.palette = pseudo ? 'pseudo' : 'gray';
+  els.palette.checked = pseudo;
+  state.dirty = true;
+}
+
+els.play.addEventListener('click', () => setPlaying(!state.playing));
+els.restart.addEventListener('click', () => { seek(0); setPlaying(true); });
+els.timeline.addEventListener('pointerdown', () => { state.scrubbing = true; });
+els.timeline.addEventListener('pointerup', () => { state.scrubbing = false; });
+els.timeline.addEventListener('input', () => seek(Number(els.timeline.value) / 1000 * TL.total));
+els.speed.addEventListener('change', () => { state.speed = Number(els.speed.value); });
+els.palette.addEventListener('change', () => setPalette(els.palette.checked));
+els.fullscreen.addEventListener('click', toggleFullscreen);
+els.open.addEventListener('click', () => els.folder.click());
+els.startOpen.addEventListener('click', () => els.folder.click());
+els.startWithout.addEventListener('click', () => { els.startCard.hidden = true; seek(0); setPlaying(true); });
+els.folder.addEventListener('change', () => {
+  const files = [...els.folder.files].map(file => ({ path: file.webkitRelativePath || file.name, file }));
+  els.folder.value = '';
+  if (files.length) loadFiles(files, 'выбранная папка');
+});
+
+window.addEventListener('keydown', e => {
+  if (e.target instanceof Element && e.target.closest('button, input, select, textarea')) return;
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!state.playing); }
+  else if (e.code === 'KeyR') { seek(0); setPlaying(true); }
+  else if (e.code === 'ArrowLeft') seek(state.t - 2);
+  else if (e.code === 'ArrowRight') seek(state.t + 2);
+  else if (e.code === 'KeyF') toggleFullscreen();
+  else if (e.code === 'KeyP') setPalette(state.palette !== 'pseudo');
+});
+
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+let dragDepth = 0;
+window.addEventListener('dragenter', e => {
+  if (!hasFiles(e)) return;
+  dragDepth++;
+  els.stage.classList.add('dragging');
+});
+window.addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) els.stage.classList.remove('dragging');
+});
+window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('drop', async e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  els.stage.classList.remove('dragging');
+  const files = await filesFromDrop(e.dataTransfer);
+  if (files.length) loadFiles(files, 'перетащенная папка');
+});
+
+new ResizeObserver(resize).observe(els.stage);
+// ══════════════════════════════════════════════════════════════════
+
+
+// ════ Start ════════════════════════════════════════════════════════
+(async function start() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('palette') === 'pseudo') setPalette(true);
+  if (params.has('t')) initialTime = Number(params.get('t')) || 0;
+  resize();
+  requestAnimationFrame(tick);
+
+  const base = params.get('data') || '../output/';
+  try {
+    applyDataset(await loadDataset(fetchProvider(base), base));
+  } catch (err) {
+    els.startCard.hidden = false;
+    if (params.has('data')) setStatus(`Не удалось загрузить ${base}: ${err.message}`, true);
+    else setStatus('Откройте папку output с результатами расчёта.');
+    if (initialTime != null) seek(initialTime);
+  }
+})();
+// ══════════════════════════════════════════════════════════════════
+</script>
+</body>
+</html>
