@@ -58,6 +58,8 @@ private:
     // ════ Input / Output ══════════════════════════════════════════
     std::filesystem::path input_path_       = "input/high/04_suitcase.pgm";
     std::filesystem::path output_directory_ = "output";
+
+    int iteration_save_step_ = 0; // save every N-th solver iterate; 0 = off
     // ══════════════════════════════════════════════════════════════
 
 public:
@@ -104,6 +106,7 @@ public:
 
     [[nodiscard]] std::filesystem::path get_input_path      () const;
     [[nodiscard]] std::filesystem::path get_output_directory() const;
+    [[nodiscard]] int get_iteration_save_step() const noexcept;
     // ══════════════════════════════════════════════════════════════
 };
 
@@ -148,8 +151,9 @@ struct Config::Builder {
 
 
     // ════ Input / Output ══════════════════════════════════════════
-    Builder& set_input_path      (const std::filesystem::path& input_path);
-    Builder& set_output_directory(const std::filesystem::path& output_directory);
+    Builder& set_input_path         (const std::filesystem::path& input_path);
+    Builder& set_output_directory   (const std::filesystem::path& output_directory);
+    Builder& set_iteration_save_step(const int iteration_save_step);
     // ══════════════════════════════════════════════════════════════
 
     [[nodiscard]] Config build() const;

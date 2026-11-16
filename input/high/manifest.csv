@@ -8,3 +8,4 @@ name,description_ru,formats,resolution_1,resolution_2,interpretation
 06_nested_materials,Вложенные материалы и полости,"PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
 07_packed_suitcase,Плотно заполненный чемодан с деталями,"PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
 08_resolution_target,Контрастная мишень для оценки разрешения,"PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max
+09_suitcase_pistol,"Чемодан с пистолетом (металлический затвор, магазин с патронами), одеждой, планшетом и бутылкой","PNG-L, PGM-P5",256x256,512x512,mu=(pixel/255)*mu_max

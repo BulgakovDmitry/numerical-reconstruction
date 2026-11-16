@@ -22,7 +22,8 @@ ReconstructionResult solve_tikhonov(const SparseMatrix& A,
                                      const SparseMatrix& L,
                                      const double lambda,
                                      const double epsilon,
-                                     const int max_iterations) {
+                                     const int max_iterations,
+                                     const IterationCallback& on_iteration) {
     if (A.rows() <= 0 || A.cols() <= 0 || b.size() != A.rows() || L.cols() != A.cols()) {
         throw std::invalid_argument("Reconstruction: incompatible or empty matrix/vector dimensions");
     }
@@ -83,6 +84,9 @@ ReconstructionResult solve_tikhonov(const SparseMatrix& A,
                 throw std::runtime_error("Reconstruction: nonfinite final residual");
             }
             result.converged = result.relative_residual <= epsilon;
+            if (on_iteration) {
+                on_iteration(result.iterations, result.mu, result.relative_residual);
+            }
             if (result.converged || last_iteration) {
                 return result;
             }
@@ -93,6 +97,9 @@ ReconstructionResult solve_tikhonov(const SparseMatrix& A,
             rho = residual.dot(preconditioned);
             require_positive_step(rho);
             continue;
+        }
+        if (on_iteration) {
+            on_iteration(result.iterations, result.mu, result.relative_residual);
         }
 
         preconditioned = residual.cwiseQuotient(diagonal);
