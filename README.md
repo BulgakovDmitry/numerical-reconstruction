@@ -51,7 +51,7 @@ $$
 После логарифмирования получаем:
 
 $$
-b_{\theta,k}=-\ln\!\frac{I_{\theta,k}}{I_{0,\theta,k}}
+b_{\theta,k}=-\ln\frac{I_{\theta,k}}{I_{0,\theta,k}}
 =\int_{\ell_{\theta,k}}\mu(x,y)\,ds
 $$
 
