@@ -1,6 +1,7 @@
 .vscode
 output
 build
+.cache
 
 # Local project notes for assistants
 /CLAUDE.md
