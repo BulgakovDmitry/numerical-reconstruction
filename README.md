@@ -242,3 +242,247 @@ $$
 \boldsymbol\mu_\lambda
 =\left(A^{\mathsf T}A+\lambda L^{\mathsf T}L\right)^{-1}A^{\mathsf T}\mathbf b
 $$
+
+### 6. Моделирование шума
+
+Идеальное измерение для $i$-го луча:
+
+$$
+b_i^{\mathrm{ideal}}=(A\boldsymbol\mu_{\mathrm{true}})_i.
+$$
+
+При среднем числе падающих фотонов $I_0>0$ закон Бугера - Ламберта - Бера задаёт среднее число фотонов на детекторе:
+
+$$
+I_i=I_0e^{-b_i^{\mathrm{ideal}}}.
+$$
+
+Числа зарегистрированных фотонов $K_i$ генерируем независимо по закону Пуассона:
+
+$$
+\mathbb P(K_i=k)=\frac{I_i^k}{k!}e^{-I_i},\qquad k=0,1,2,\dots
+$$
+
+Обратное логарифмирование даёт шумное измерение:
+
+$$
+b_i^{\mathrm{noisy}}=\ln\frac{I_0}{\max(K_i,1)}.
+$$
+
+Нулевой отсчёт заменяем на $1$, чтобы логарифм был определён.
+
+Таким образом моделируются шумы в измерениях, вызванные дискретностью фотонов и статистикой Пуассона.
+
+## Примеры запуска
+
+### 1. Чемодан 64x64, точные измерения, первый порядок
+```
+./build/numerical-reconstruction \
+    --input input/low/04_suitcase.pgm \
+    --pixels-x 64 --pixels-y 64 \
+    --num-angles 180 --num-detectors 128 \
+    --regularization first-order --lambda 0.01 \
+    --epsilon 1e-8 --max-iterations 2000 \
+    --output output/examples/01_ideal
+```
+
+<table width="100%">
+  <tr>
+    <th width="50%">Оригинальное изображение</th>
+    <th width="50%">Реконструированное изображение</th>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="img/01/original.png" alt="Оригинальное изображение" width="400">
+    </td>
+    <td width="50%" align="center">
+      <img src="img/01/reconstructed.png" alt="Реконструированное изображение" width="400">
+    </td>
+  </tr>
+</table>
+
+### 2. Тот же чемодан с шумом Пуассона: 10000 падающих фотонов на луч
+```
+./build/numerical-reconstruction \
+    --input input/low/04_suitcase.pgm \
+    --pixels-x 64 --pixels-y 64 \
+    --num-angles 180 --num-detectors 128 \
+    --regularization first-order --lambda 0.01 \
+    --poisson-noise --incident-photon-count 10000 --random-seed 42 \
+    --output output/examples/02_noisy_first_order
+```
+
+<table width="100%">
+  <tr>
+    <th width="50%">Оригинальное изображение</th>
+    <th width="50%">Реконструированное изображение</th>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="img/02/original.png" alt="Оригинальное изображение" width="400">
+    </td>
+    <td width="50%" align="center">
+      <img src="img/02/reconstructed.png" alt="Реконструированное изображение" width="400">
+    </td>
+  </tr>
+</table>
+
+### 3. Нулевой порядок на тех же шумных измерениях: можно сравнить с примером 2 (seed не менялся)
+```
+./build/numerical-reconstruction \
+    --input input/low/04_suitcase.pgm \
+    --pixels-x 64 --pixels-y 64 \
+    --num-angles 180 --num-detectors 128 \
+    --regularization zero-order --lambda 0.01 \
+    --poisson-noise --incident-photon-count 10000 --random-seed 42 \
+    --output output/examples/03_noisy_zero_order
+```
+
+<table width="100%">
+  <tr>
+    <th width="50%">Оригинальное изображение</th>
+    <th width="50%">Реконструированное изображение</th>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="img/03/original.png" alt="Оригинальное изображение" width="400">
+    </td>
+    <td width="50%" align="center">
+      <img src="img/03/reconstructed.png" alt="Реконструированное изображение" width="400">
+    </td>
+  </tr>
+</table>
+
+### 4. Более детализированное изображение 512x512, шум Пуассона: 2500 фотонов на луч, первый порядок
+
+```bash
+./build/numerical-reconstruction \
+    --input input/sp/multiscale_phantom_512.pgm \
+    --pixels-x 512 --pixels-y 512 \
+    --image-width 2 --image-height 2 \
+    --radius 2.5 --detector-distance 5.5 \
+    --num-angles 360 --num-detectors 768 \
+    --start-angle 0 --scan-angle 6.283185307179586 \
+    --half-fan-angle 0.6108652381980153 \
+    --regularization first-order --lambda 0.03 \
+    --epsilon 1e-8 --max-iterations 2000 \
+    --poisson-noise --incident-photon-count 2500 --random-seed 42 \
+    --output output/sp_first_order
+```
+
+<table width="100%">
+  <tr>
+    <th width="50%">Оригинальное изображение</th>
+    <th width="50%">Реконструкция: первый порядок</th>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="img/sp/original_1.png" alt="Оригинальное изображение" width="400">
+    </td>
+    <td width="50%" align="center">
+      <img src="img/sp/reconstructed_1.png" alt="Реконструкция с регуляризацией первого порядка" width="400">
+    </td>
+  </tr>
+</table>
+
+### 5. Нулевой порядок на тех же шумных измерениях: сравнение с примером 4
+
+Геометрия, шум, seed и λ совпадают с примером 4; меняются только порядок регуляризации и папка результата.
+
+```bash
+./build/numerical-reconstruction \
+    --input input/sp/multiscale_phantom_512.pgm \
+    --pixels-x 512 --pixels-y 512 \
+    --image-width 2 --image-height 2 \
+    --radius 2.5 --detector-distance 5.5 \
+    --num-angles 360 --num-detectors 768 \
+    --start-angle 0 --scan-angle 6.283185307179586 \
+    --half-fan-angle 0.6108652381980153 \
+    --regularization zero-order --lambda 0.03 \
+    --epsilon 1e-8 --max-iterations 2000 \
+    --poisson-noise --incident-photon-count 2500 --random-seed 42 \
+    --output output/sp_zero_order
+```
+
+<table width="100%">
+  <tr>
+    <th width="50%">Оригинальное изображение</th>
+    <th width="50%">Реконструкция: нулевой порядок</th>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="img/sp/original_0.png" alt="Оригинальное изображение" width="400">
+    </td>
+    <td width="50%" align="center">
+      <img src="img/sp/reconstructed_0.png" alt="Реконструкция с регуляризацией нулевого порядка" width="400">
+    </td>
+  </tr>
+</table>
+
+### 6. Первый порядок с увеличенным λ: сглаживание и потеря мелких деталей
+
+Увеличим λ с 0.03 до 0.3, сохранив геометрию и шум примера 4. Более сильный штраф на соседние разности сглаживает изображение, но размывает границы и мелкие детали, допуская большее расхождение с измерениями.
+
+```bash
+./build/numerical-reconstruction \
+    --input input/sp/multiscale_phantom_512.pgm \
+    --pixels-x 512 --pixels-y 512 \
+    --image-width 2 --image-height 2 \
+    --radius 2.5 --detector-distance 5.5 \
+    --num-angles 360 --num-detectors 768 \
+    --start-angle 0 --scan-angle 6.283185307179586 \
+    --half-fan-angle 0.6108652381980153 \
+    --regularization first-order --lambda 0.3 \
+    --epsilon 1e-8 --max-iterations 2000 \
+    --poisson-noise --incident-photon-count 2500 --random-seed 42 \
+    --output output/sp_first_order_hl
+```
+
+<table width="100%">
+  <tr>
+    <th width="50%">Оригинальное изображение</th>
+    <th width="50%">Реконструкция: первый порядок, λ = 0.3</th>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="img/sp/hl/original_1.png" alt="Оригинальное изображение" width="400">
+    </td>
+    <td width="50%" align="center">
+      <img src="img/sp/hl/reconstructed_1.png" alt="Реконструкция с регуляризацией первого порядка при λ = 0.3" width="400">
+    </td>
+  </tr>
+</table>
+
+### 7. Нулевой порядок с увеличенным λ: подавление амплитуды и потеря контраста
+
+Увеличим λ с 0.03 до 0.3 при тех же измерениях, что в примере 5. Нулевой порядок сильнее уменьшает норму решения и снижает контраст; пространственная гладкость непосредственно этим штрафом не задаётся.
+
+```bash
+./build/numerical-reconstruction \
+    --input input/sp/multiscale_phantom_512.pgm \
+    --pixels-x 512 --pixels-y 512 \
+    --image-width 2 --image-height 2 \
+    --radius 2.5 --detector-distance 5.5 \
+    --num-angles 360 --num-detectors 768 \
+    --start-angle 0 --scan-angle 6.283185307179586 \
+    --half-fan-angle 0.6108652381980153 \
+    --regularization zero-order --lambda 0.3 \
+    --epsilon 1e-8 --max-iterations 2000 \
+    --poisson-noise --incident-photon-count 2500 --random-seed 42 \
+    --output output/sp_zero_order_hl
+```
+
+<table width="100%">
+  <tr>
+    <th width="50%">Оригинальное изображение</th>
+    <th width="50%">Реконструкция: нулевой порядок, λ = 0.3</th>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="img/sp/hl/original_0.png" alt="Оригинальное изображение" width="400">
+    </td>
+    <td width="50%" align="center">
+      <img src="img/sp/hl/reconstructed_0.png" alt="Реконструкция с регуляризацией нулевого порядка при λ = 0.3" width="400">
+    </td>
+  </tr>
+</table>
