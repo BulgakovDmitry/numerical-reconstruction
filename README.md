@@ -13,16 +13,25 @@
 
 Опишем координаты трубки, являющейся источником:
 
-$$
-S(\theta)=\begin{pmatrix}R\cos\theta\\\ R\sin\theta\end{pmatrix}
-$$
+```math
+S(\theta)=\begin{pmatrix}
+R\cos\theta \\
+R\sin\theta
+\end{pmatrix}
+```
 
 Также введем два единичные вектора (направление на центр и перпендикуляр к нему):
 
-$$
-\mathbf u_\theta=\begin{pmatrix}-\cos\theta\\\ -\sin\theta\end{pmatrix}\qquad
-\mathbf v_\theta=\begin{pmatrix}-\sin\theta\\\cos\theta\end{pmatrix}
-$$
+```math
+\mathbf u_\theta=\begin{pmatrix}
+-\cos\theta \\
+-\sin\theta
+\end{pmatrix}\qquad
+\mathbf v_\theta=\begin{pmatrix}
+-\sin\theta \\
+\cos\theta
+\end{pmatrix}
+```
 
 Детекторы расположены на расстоянии $L$ от источника на дуге, центр кривизны которой совпадает с источником. \
 Тогда координаты k-го детектора:
@@ -115,21 +124,30 @@ $$
 
 Рассмотрим один луч. Пусть источник находится в точке
 
-$$
-S = \begin{pmatrix} s_x \\ s_y \end{pmatrix},
-$$
+```math
+S = \begin{pmatrix}
+s_x \\
+s_y
+\end{pmatrix},
+```
 
 а детектор — в точке
 
-$$
-D = \begin{pmatrix} D_x \\ D_y \end{pmatrix}.
-$$
+```math
+D = \begin{pmatrix}
+D_x \\
+D_y
+\end{pmatrix}.
+```
 
 Введём вектор перемещения:
 
-$$
-\Delta = D-S = \begin{pmatrix}\Delta_x \\ \Delta_y \end{pmatrix}.
-$$
+```math
+\Delta = D-S = \begin{pmatrix}
+\Delta_x \\
+\Delta_y
+\end{pmatrix}.
+```
 
 Путь от источника до детектора задаётся параметрически:
 
@@ -584,14 +602,14 @@ $$
 
 Пусть $\mu_{i,j}$ — коэффициент ослабления в пикселе с индексами $(i,j)$, где $i,j=1,\dots,n$. Будем считать, что индекс $i$ меняется вдоль оси $x$, а $j$ — вдоль оси $y$. Для квадратных пикселей со стороной $h$ соседние разности равны:
 
-$$
+```math
 \begin{aligned}
 \delta_x\mu_{i,j}&=\mu_{i+1,j}-\mu_{i,j}
 &&i=1,\dots,n-1\quad j=1,\dots,n\\
 \delta_y\mu_{i,j}&=\mu_{i,j+1}-\mu_{i,j}
 &&i=1,\dots,n\quad j=1,\dots,n-1
 \end{aligned}
-$$
+```
 
 Сумма квадратов этих разностей задаёт штраф:
 
@@ -613,7 +631,7 @@ $$
 
 Тогда интеграл квадрата нормы градиента по области изображения $\Omega$ приближённо равен:
 
-$$
+```math
 \begin{aligned}
 \int_\Omega\Vert\nabla\mu(x,y)\Vert_2^2\,dx\,dy
 &\approx h^2\left[
@@ -622,7 +640,7 @@ $$
 \right]\\
 &=R(\boldsymbol\mu)
 \end{aligned}
-$$
+```
 
 Здесь множитель $h^2$ — площадь пикселя; в двумерном случае на квадратной сетке он сокращается с $h^{-2}$ из квадратов разностных производных. Это связь с непрерывной моделью.
 
@@ -630,7 +648,7 @@ $$
 
 Соответствующий дискретный функционал:
 
-$$
+```math
 \begin{aligned}
 J_\lambda(\boldsymbol\mu)
 &=\Vert A\boldsymbol\mu-\mathbf b\Vert_2^2+\lambda\Vert L\boldsymbol\mu\Vert_2^2\\
@@ -642,7 +660,7 @@ J_\lambda(\boldsymbol\mu)
 \right]\\
 &=\Vert A\boldsymbol\mu-\mathbf b\Vert_2^2+\lambda h^2\Vert\nabla_h\boldsymbol\mu\Vert_2^2
 \end{aligned}
-$$
+```
 
 Такой штраф способствует сглаживанию изображения, но может размывать реальные границы между материалами. Для любого постоянного изображения $\mu_{i,j}=c$ он равен нулю: регуляризация не штрафует постоянный уровень, который должен определяться измерениями.
 
@@ -653,7 +671,7 @@ $$
 
 Раскроем квадраты норм и вычислим производные обоих слагаемых:
 
-$$
+```math
 \begin{aligned}
 \nabla_{\boldsymbol\mu}J_\lambda(\boldsymbol\mu)
 &=\nabla_{\boldsymbol\mu}\left[
@@ -663,7 +681,7 @@ $$
 &=2A^{\mathsf T}(A\boldsymbol\mu-\mathbf b)
 +2\lambda L^{\mathsf T}L\boldsymbol\mu
 \end{aligned}
-$$
+```
 
 В точке минимума $\boldsymbol\mu_\lambda$ градиент равен нулю. Разделив уравнение на $2$ и перенеся известные величины вправо, получаем систему нормальных уравнений:
 
