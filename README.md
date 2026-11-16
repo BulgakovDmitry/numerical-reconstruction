@@ -540,11 +540,11 @@ $$
 После построения матрицы доступны операции:
 
 $$
-\operatorname{project}(\boldsymbol\mu)=A\boldsymbol\mu,
+project(\boldsymbol\mu)=A\boldsymbol\mu,
 $$
 
 $$
-\operatorname{backproject}(\mathbf b)=A^{\mathsf T}\mathbf b.
+backproject(\mathbf b)=A^{\mathsf T}\mathbf b.
 $$
 
 Первая операция моделирует идеальные логарифмированные измерения для заданного изображения. Вторая вычисляет действие сопряжённого оператора, необходимое при решении обратной задачи.
