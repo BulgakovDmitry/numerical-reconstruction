@@ -128,7 +128,7 @@ $$
 S = \begin{pmatrix}
 s_x \\
 s_y
-\end{pmatrix},
+\end{pmatrix}
 ```
 
 а детектор — в точке
@@ -137,7 +137,7 @@ s_y
 D = \begin{pmatrix}
 D_x \\
 D_y
-\end{pmatrix}.
+\end{pmatrix}
 ```
 
 Введём вектор перемещения:
@@ -146,7 +146,7 @@ D_y
 \Delta = D-S = \begin{pmatrix}
 \Delta_x \\
 \Delta_y
-\end{pmatrix}.
+\end{pmatrix}
 ```
 
 Путь от источника до детектора задаётся параметрически:
